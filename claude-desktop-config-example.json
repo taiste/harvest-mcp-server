@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+        "harvest": {
+            "command": "uv",
+            "args": [
+              "run",
+              "--directory",
+              "change_directory",
+              "harvest-mcp-server.py"
+            ],
+            "env": {
+                "HARVEST_ACCOUNT_ID": "account_id",
+                "HARVEST_API_KEY": "api_key"
+            }
+        }
+    }
+}

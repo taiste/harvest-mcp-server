@@ -1,0 +1,10 @@
+[project]
+name = "harvest-mcp"
+version = "0.1.0"
+description = "A simple MCP server for Harvest"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=1.4.1",
+]
