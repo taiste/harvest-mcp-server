@@ -11,11 +11,11 @@ mcp = FastMCP("harvest-api")
 HARVEST_ACCOUNT_ID = os.environ.get("HARVEST_ACCOUNT_ID")
 HARVEST_API_KEY = os.environ.get("HARVEST_API_KEY")
 
+if not HARVEST_ACCOUNT_ID or not HARVEST_API_KEY:
+    raise ValueError("Missing Harvest API credentials. Set HARVEST_ACCOUNT_ID and HARVEST_API_KEY environment variables.")
+
 # Helper function to make Harvest API requests
 async def harvest_request(path, params=None, method="GET"):
-    if not HARVEST_ACCOUNT_ID or not HARVEST_API_KEY:
-        raise ValueError("Missing Harvest API credentials. Set HARVEST_ACCOUNT_ID and HARVEST_API_KEY environment variables.")
-
     headers = {
         "Harvest-Account-Id": HARVEST_ACCOUNT_ID,
         "Authorization": f"Bearer {HARVEST_API_KEY}",
