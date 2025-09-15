@@ -34,10 +34,14 @@ async def harvest_request(path, params=None, method="GET"):
         else:
             response = await client.request(method, url, headers=headers, json=params)
 
-        if response.status_code != 200:
+        if response.status_code not in [200, 201, 204]:
             raise Exception(
                 f"Harvest API Error: {response.status_code} {response.text}"
             )
+
+        # Handle empty responses (like DELETE operations)
+        if response.status_code == 204 or not response.text:
+            return None
 
         return response.json()
 
@@ -251,7 +255,7 @@ async def get_unsubmitted_timesheets(
     per_page: int = None,
 ):
     """Get unsubmitted timesheets (time entries that haven't been submitted for approval).
-    
+
     This function queries for time entries that are not yet closed/submitted, which typically
     means they are still editable and haven't been submitted for approval or invoicing.
 
@@ -278,7 +282,7 @@ async def get_unsubmitted_timesheets(
 
     # Get all time entries first
     response = await harvest_request("time_entries", params)
-    
+
     # Filter for unsubmitted entries (those that are not closed)
     unsubmitted_entries = []
     if "time_entries" in response:
@@ -286,7 +290,7 @@ async def get_unsubmitted_timesheets(
             # Time entries that are not closed are considered unsubmitted
             if not entry.get("is_closed", False):
                 unsubmitted_entries.append(entry)
-    
+
     # Create a response structure similar to the original API response
     filtered_response = {
         "time_entries": unsubmitted_entries,
@@ -298,8 +302,355 @@ async def get_unsubmitted_timesheets(
         "page": response.get("page", 1),
         "links": response.get("links", {})
     }
-    
+
     return json.dumps(filtered_response, indent=2)
+
+
+@mcp.tool()
+async def list_estimates(
+    client_id: int = None,
+    updated_since: str = None,
+    from_date: str = None,
+    to_date: str = None,
+    state: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List estimates with optional filtering.
+
+    Args:
+        client_id: Filter by client ID
+        updated_since: Only return estimates updated after the given date and time (ISO 8601 format)
+        from_date: Only return estimates with an issue_date on or after the given date (YYYY-MM-DD)
+        to_date: Only return estimates with an issue_date on or before the given date (YYYY-MM-DD)
+        state: Filter by estimate state (draft, sent, accepted, declined)
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if state is not None:
+        params["state"] = state
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    response = await harvest_request("estimates", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_estimate_details(estimate_id: int):
+    """Get detailed information about a specific estimate.
+
+    Args:
+        estimate_id: The ID of the estimate to retrieve
+    """
+    response = await harvest_request(f"estimates/{estimate_id}")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_estimate(
+    client_id: int,
+    subject: str = None,
+    notes: str = None,
+    currency: str = None,
+    issue_date: str = None,
+    purchase_order: str = None,
+    tax: float = None,
+    tax2: float = None,
+    line_items: str = None,
+):
+    """Create a new estimate.
+
+    Args:
+        client_id: The ID of the client for whom the estimate is being created (required)
+        subject: The estimate subject
+        notes: Any additional notes to include on the estimate
+        currency: The currency used by the estimate (defaults to client's currency)
+        issue_date: Date the estimate was issued (YYYY-MM-DD, defaults to today)
+        purchase_order: The purchase order number
+        tax: First tax percentage (0-100)
+        tax2: Second tax percentage (0-100)
+        line_items: JSON string of line items array. Each item should have: kind (required), description (optional), unit_price (required), quantity (optional, defaults to 1), taxed (optional, defaults to false), taxed2 (optional, defaults to false). Example: '[{"kind": "Service", "description": "Web Development", "unit_price": 100.0, "quantity": 10, "taxed": false}]'
+    """
+    params = {"client_id": client_id}
+
+    if subject is not None:
+        params["subject"] = subject
+    if notes is not None:
+        params["notes"] = notes
+    if currency is not None:
+        params["currency"] = currency
+    if issue_date is not None:
+        params["issue_date"] = issue_date
+    if purchase_order is not None:
+        params["purchase_order"] = purchase_order
+    if tax is not None:
+        params["tax"] = tax
+    if tax2 is not None:
+        params["tax2"] = tax2
+
+    if line_items is not None:
+        try:
+            parsed_line_items = json.loads(line_items)
+            params["line_items"] = parsed_line_items
+        except json.JSONDecodeError:
+            raise ValueError("line_items must be a valid JSON string")
+
+    response = await harvest_request("estimates", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_estimate(
+    estimate_id: int,
+    client_id: int = None,
+    subject: str = None,
+    notes: str = None,
+    currency: str = None,
+    issue_date: str = None,
+    purchase_order: str = None,
+    tax: float = None,
+    tax2: float = None,
+    line_items: str = None,
+):
+    """Update an existing estimate.
+
+    Args:
+        estimate_id: The ID of the estimate to update (required)
+        client_id: The ID of the client for whom the estimate is being created
+        subject: The estimate subject
+        notes: Any additional notes to include on the estimate
+        currency: The currency used by the estimate
+        issue_date: Date the estimate was issued (YYYY-MM-DD)
+        purchase_order: The purchase order number
+        tax: First tax percentage (0-100)
+        tax2: Second tax percentage (0-100)
+        line_items: JSON string of line items array. Each item should have: kind (required), description (optional), unit_price (required), quantity (optional, defaults to 1), taxed (optional, defaults to false), taxed2 (optional, defaults to false). Example: '[{"kind": "Service", "description": "Web Development", "unit_price": 100.0, "quantity": 10, "taxed": false}]'
+    """
+    params = {}
+
+    if client_id is not None:
+        params["client_id"] = client_id
+    if subject is not None:
+        params["subject"] = subject
+    if notes is not None:
+        params["notes"] = notes
+    if currency is not None:
+        params["currency"] = currency
+    if issue_date is not None:
+        params["issue_date"] = issue_date
+    if purchase_order is not None:
+        params["purchase_order"] = purchase_order
+    if tax is not None:
+        params["tax"] = tax
+    if tax2 is not None:
+        params["tax2"] = tax2
+
+    if line_items is not None:
+        try:
+            parsed_line_items = json.loads(line_items)
+            params["line_items"] = parsed_line_items
+        except json.JSONDecodeError:
+            raise ValueError("line_items must be a valid JSON string")
+
+    response = await harvest_request(f"estimates/{estimate_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def delete_estimate(estimate_id: int):
+    """Delete an estimate. This action is not reversible.
+
+    Args:
+        estimate_id: The ID of the estimate to delete
+    """
+    response = await harvest_request(f"estimates/{estimate_id}", method="DELETE")
+    if response is None:
+        return json.dumps({"message": "Estimate successfully deleted"}, indent=2)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def add_line_item_to_estimate(
+    estimate_id: int,
+    kind: str,
+    unit_price: float,
+    description: str = None,
+    quantity: int = None,
+    taxed: bool = None,
+    taxed2: bool = None,
+):
+    """Add a new line item to an existing estimate.
+
+    Args:
+        estimate_id: The ID of the estimate to add the line item to (required)
+        kind: The category name for the line item (required, e.g., "Service", "Product")
+        unit_price: The unit price for this line item (required)
+        description: Optional description of the line item
+        quantity: The quantity for this line item (defaults to 1)
+        taxed: Whether this line item is subject to the first tax (defaults to false)
+        taxed2: Whether this line item is subject to the second tax (defaults to false)
+    """
+    # First, get the current estimate to preserve existing line items
+    current_estimate = await harvest_request(f"estimates/{estimate_id}")
+
+    # Build the new line item
+    new_line_item = {
+        "kind": kind,
+        "unit_price": unit_price
+    }
+
+    if description is not None:
+        new_line_item["description"] = description
+    if quantity is not None:
+        new_line_item["quantity"] = quantity
+    if taxed is not None:
+        new_line_item["taxed"] = taxed
+    if taxed2 is not None:
+        new_line_item["taxed2"] = taxed2
+
+    # Get existing line items or initialize empty list
+    existing_line_items = current_estimate.get("line_items", [])
+
+    # Add the new line item to the existing ones
+    updated_line_items = existing_line_items + [new_line_item]
+
+    # Update the estimate with the new line items array
+    params = {"line_items": updated_line_items}
+
+    response = await harvest_request(f"estimates/{estimate_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_line_item_in_estimate(
+    estimate_id: int,
+    line_item_id: int,
+    kind: str = None,
+    unit_price: float = None,
+    description: str = None,
+    quantity: int = None,
+    taxed: bool = None,
+    taxed2: bool = None,
+):
+    """Update an existing line item in an estimate.
+
+    Args:
+        estimate_id: The ID of the estimate containing the line item (required)
+        line_item_id: The ID of the line item to update (required)
+        kind: The category name for the line item (e.g., "Service", "Product")
+        unit_price: The unit price for this line item
+        description: Description of the line item
+        quantity: The quantity for this line item
+        taxed: Whether this line item is subject to the first tax
+        taxed2: Whether this line item is subject to the second tax
+    """
+    # First, get the current estimate to preserve other line items
+    current_estimate = await harvest_request(f"estimates/{estimate_id}")
+
+    # Get existing line items
+    existing_line_items = current_estimate.get("line_items", [])
+
+    # Find and update the specific line item
+    updated_line_items = []
+    line_item_found = False
+
+    for item in existing_line_items:
+        if item.get("id") == line_item_id:
+            line_item_found = True
+            # Update the line item with new values
+            updated_item = {"id": line_item_id}
+
+            # Use new values if provided, otherwise keep existing
+            updated_item["kind"] = kind if kind is not None else item.get("kind")
+            updated_item["unit_price"] = unit_price if unit_price is not None else item.get("unit_price")
+
+            if description is not None:
+                updated_item["description"] = description
+            elif "description" in item:
+                updated_item["description"] = item["description"]
+
+            if quantity is not None:
+                updated_item["quantity"] = quantity
+            elif "quantity" in item:
+                updated_item["quantity"] = item["quantity"]
+
+            if taxed is not None:
+                updated_item["taxed"] = taxed
+            elif "taxed" in item:
+                updated_item["taxed"] = item["taxed"]
+
+            if taxed2 is not None:
+                updated_item["taxed2"] = taxed2
+            elif "taxed2" in item:
+                updated_item["taxed2"] = item["taxed2"]
+
+            updated_line_items.append(updated_item)
+        else:
+            # Keep other line items unchanged
+            updated_line_items.append(item)
+
+    if not line_item_found:
+        raise ValueError(f"Line item with ID {line_item_id} not found in estimate {estimate_id}")
+
+    # Update the estimate with the modified line items array
+    params = {"line_items": updated_line_items}
+
+    response = await harvest_request(f"estimates/{estimate_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def delete_line_item_from_estimate(estimate_id: int, line_item_id: int):
+    """Delete a line item from an estimate.
+
+    Args:
+        estimate_id: The ID of the estimate containing the line item (required)
+        line_item_id: The ID of the line item to delete (required)
+    """
+    # First, get the current estimate to preserve other line items
+    current_estimate = await harvest_request(f"estimates/{estimate_id}")
+
+    # Get existing line items
+    existing_line_items = current_estimate.get("line_items", [])
+
+    # Build updated line items array with the _destroy flag for the item to delete
+    updated_line_items = []
+    line_item_found = False
+
+    for item in existing_line_items:
+        if item.get("id") == line_item_id:
+            line_item_found = True
+            # Mark this item for deletion
+            updated_line_items.append({
+                "id": line_item_id,
+                "_destroy": True
+            })
+        else:
+            # Keep other line items unchanged
+            updated_line_items.append(item)
+
+    if not line_item_found:
+        raise ValueError(f"Line item with ID {line_item_id} not found in estimate {estimate_id}")
+
+    # Update the estimate with the modified line items array
+    params = {"line_items": updated_line_items}
+
+    response = await harvest_request(f"estimates/{estimate_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
 
 
 if __name__ == "__main__":

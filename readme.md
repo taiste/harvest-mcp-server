@@ -31,6 +31,16 @@ The server provides the following functionality:
 ### Tasks
 - List available tasks with filtering options
 
+### Estimates
+- List estimates with filtering options (client, date range, state)
+- Create new estimates with line items
+- Update existing estimates
+- Retrieve detailed estimate information
+- Delete estimates
+- Add individual line items to existing estimates
+- Update specific line items within estimates
+- Delete specific line items from estimates
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -80,6 +90,13 @@ Once connected, you can ask Claude about your Harvest data with queries like:
 - "List all available tasks"
 - "Get my unsubmitted timesheets from this month"
 - "Show me unsubmitted time entries for user [user_id]"
+- "Show me all estimates for client [client_id]"
+- "Create an estimate for client [client_id] with web development services"
+- "List all draft estimates"
+- "Get details for estimate [estimate_id]"
+- "Add a new line item to estimate [estimate_id]"
+- "Update line item [line_item_id] in estimate [estimate_id]"
+- "Delete line item [line_item_id] from estimate [estimate_id]"
 
 ## Customization
 
