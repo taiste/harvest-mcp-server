@@ -653,6 +653,60 @@ async def delete_line_item_from_estimate(estimate_id: int, line_item_id: int):
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def list_invoices(
+    client_id: int = None,
+    updated_since: str = None,
+    from_date: str = None,
+    to_date: str = None,
+    state: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List invoices with optional filtering.
+
+    Args:
+        client_id: Filter by client ID
+        updated_since: Only return invoices updated after the given date and time (ISO 8601 format)
+        from_date: Only return invoices with an issue_date on or after the given date (YYYY-MM-DD)
+        to_date: Only return invoices with an issue_date on or before the given date (YYYY-MM-DD)
+        state: Filter by invoice state (draft, open, paid, closed)
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if state is not None:
+        params["state"] = state
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    response = await harvest_request("invoices", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_invoice_details(invoice_id: int):
+    """Get detailed information about a specific invoice.
+
+    Args:
+        invoice_id: The ID of the invoice to retrieve
+    """
+    response = await harvest_request(f"invoices/{invoice_id}")
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
