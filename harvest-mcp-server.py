@@ -391,7 +391,9 @@ async def get_estimate_details(estimate_id: int):
     """Retrieve details for a specific estimate.
 
     Args:
-        estimate_id: The ID of the estimate to retrieve
+        estimate_id: The internal integer ID of the estimate (e.g. 4019251),
+            NOT the user-facing number ("79") shown in the Harvest UI.
+            Use get_estimate_by_number if you only have the number.
     """
     response = await harvest_request(f"estimates/{estimate_id}")
     return json.dumps(response, indent=2)
@@ -409,7 +411,9 @@ async def list_estimate_messages(
     Messages are returned sorted by creation date, most recent first.
 
     Args:
-        estimate_id: The ID of the estimate to list messages for
+        estimate_id: The internal integer ID of the estimate (e.g. 4019251),
+            NOT the user-facing number ("79"). Use get_estimate_by_number
+            if you only have the number.
         updated_since: Only return messages updated since the given datetime (e.g. 2021-04-09T12:48:29Z)
         page: The page number for pagination (default: 1). Deprecated by Harvest
             in favor of cursor-based pagination via the response's links.next URL.
@@ -513,7 +517,9 @@ async def update_estimate(
     remain untouched.
 
     Args:
-        estimate_id: The ID of the estimate to update (required)
+        estimate_id: The internal integer ID of the estimate to update
+            (e.g. 4019251), NOT the user-facing number ("79"). Use
+            get_estimate_by_number if you only have the number.
         client_id: The ID of the client this estimate belongs to
         number: Estimate number
         purchase_order: The purchase order number
@@ -573,7 +579,9 @@ async def change_estimate_state(estimate_id: int, event_type: str):
     email the estimate to recipients, use send_estimate_message instead.
 
     Args:
-        estimate_id: The ID of the estimate to transition
+        estimate_id: The internal integer ID of the estimate to transition
+            (e.g. 4019251), NOT the user-facing number ("79"). Use
+            get_estimate_by_number if you only have the number.
         event_type: One of:
             - "send": mark a draft estimate as sent
             - "accept": mark a sent estimate as accepted (closes it)
@@ -611,7 +619,9 @@ async def send_estimate_message(
     implies sending.
 
     Args:
-        estimate_id: The ID of the estimate to send a message for (required)
+        estimate_id: The internal integer ID of the estimate to send a
+            message for (e.g. 4019251), NOT the user-facing number ("79").
+            Use get_estimate_by_number if you only have the number.
         recipients: Array of recipient objects (required). Each must have:
             - email (string, required): Email address of the recipient
             - name (string, optional): Display name of the recipient
@@ -646,7 +656,9 @@ async def delete_estimate(estimate_id: int):
     """Delete an estimate.
 
     Args:
-        estimate_id: The ID of the estimate to delete
+        estimate_id: The internal integer ID of the estimate to delete
+            (e.g. 4019251), NOT the user-facing number ("79"). Use
+            get_estimate_by_number if you only have the number.
     """
     if HARVEST_READ_ONLY:
         return READ_ONLY_MESSAGE
