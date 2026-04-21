@@ -586,6 +586,57 @@ async def change_estimate_state(estimate_id: int, event_type: str):
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def send_estimate_message(
+    estimate_id: int,
+    recipients: list,
+    subject: str = None,
+    body: str = None,
+    send_me_a_copy: bool = None,
+    event_type: str = None,
+):
+    """Create an estimate message. **This sends an email to the recipients.**
+
+    Use this to email an estimate to a client. To merely change the estimate's
+    state without sending email (e.g. "mark as sent"), use change_estimate_state
+    instead.
+
+    Note: If the estimate is in "draft" state, sending any message with
+    recipients will automatically transition it to "sent" (even without
+    passing event_type). This matches Harvest's UI behavior — emailing
+    implies sending.
+
+    Args:
+        estimate_id: The ID of the estimate to send a message for (required)
+        recipients: Array of recipient objects (required). Each must have:
+            - email (string, required): Email address of the recipient
+            - name (string, optional): Display name of the recipient
+            Example: [{"name": "Jane Doe", "email": "jane@example.com"}]
+        subject: The message subject
+        body: The message body
+        send_me_a_copy: If true, a copy of the email is sent to the current user (default false)
+        event_type: Optionally also run a state transition alongside the email.
+            One of: "send", "accept", "decline", "re-open".
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"recipients": recipients}
+    if subject is not None:
+        params["subject"] = subject
+    if body is not None:
+        params["body"] = body
+    if send_me_a_copy is not None:
+        params["send_me_a_copy"] = send_me_a_copy
+    if event_type is not None:
+        params["event_type"] = event_type
+
+    response = await harvest_request(
+        f"estimates/{estimate_id}/messages", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
