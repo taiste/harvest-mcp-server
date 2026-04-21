@@ -393,6 +393,36 @@ async def get_estimate_details(estimate_id: int):
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def list_estimate_messages(
+    estimate_id: int,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List messages associated with an estimate.
+
+    Messages are returned sorted by creation date, most recent first.
+
+    Args:
+        estimate_id: The ID of the estimate to list messages for
+        updated_since: Only return messages updated since the given datetime (e.g. 2021-04-09T12:48:29Z)
+        page: The page number for pagination (default: 1). Deprecated by Harvest
+            in favor of cursor-based pagination via the response's links.next URL.
+        per_page: The number of records to return per page (1-2000, default: 2000)
+    """
+    params = {}
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    response = await harvest_request(f"estimates/{estimate_id}/messages", params)
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
