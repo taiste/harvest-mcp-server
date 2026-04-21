@@ -382,6 +382,17 @@ async def list_estimates(
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def get_estimate_details(estimate_id: int):
+    """Retrieve details for a specific estimate.
+
+    Args:
+        estimate_id: The ID of the estimate to retrieve
+    """
+    response = await harvest_request(f"estimates/{estimate_id}")
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
