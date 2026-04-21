@@ -349,8 +349,18 @@ async def list_estimates(
     state: str = None,
     page: int = None,
     per_page: int = None,
+    include_line_items: bool = False,
 ):
     """List estimates with optional filtering.
+
+    By default the `line_items` array is stripped from each estimate in the
+    response to keep list calls within MCP tool-response size limits
+    (line_items can account for ~70% of an estimate's payload size). This
+    mirrors the summary-vs-detail split that most REST APIs use for list
+    endpoints. To fetch full line_items for one estimate, use
+    get_estimate_details. To include line_items in every estimate of this
+    list call, pass include_line_items=True — but note that large result
+    sets can then exceed MCP tool-response size limits.
 
     Args:
         client_id: Only return estimates belonging to the client with the given ID
@@ -359,10 +369,13 @@ async def list_estimates(
         to_date: Only return estimates with an issue_date on or before the given date (YYYY-MM-DD)
         state: Only return estimates with a matching state. One of: draft, sent, accepted, declined
         page: The page number to use in pagination (default: 1)
-        per_page: The number of records to return per page (1-2000, default: 10;
-            Harvest's native default is 2000 but this is capped here because each
-            estimate includes nested line_items and long notes, and large result
-            sets can exceed MCP tool-response size limits)
+        per_page: The number of records to return per page (1-2000, default: 25;
+            Harvest's native default is 2000 but this wrapper uses 25 since the
+            typical summary-mode response per estimate is ~2KB)
+        include_line_items: If True, include each estimate's line_items array
+            in the response. Defaults to False. Be cautious combining this with
+            a high per_page — full estimate payloads are much larger and can
+            exceed MCP tool-response size limits.
     """
     params = {}
     if client_id is not None:
@@ -380,9 +393,14 @@ async def list_estimates(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "10"
+        params["per_page"] = "25"
 
     response = await harvest_request("estimates", params)
+
+    if not include_line_items:
+        for est in response.get("estimates", []):
+            est.pop("line_items", None)
+
     return json.dumps(response, indent=2)
 
 
