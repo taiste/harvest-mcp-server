@@ -336,6 +336,52 @@ async def get_unsubmitted_timesheets(
     return json.dumps(filtered_response, indent=2)
 
 
+@mcp.tool()
+async def list_estimates(
+    client_id: int = None,
+    updated_since: str = None,
+    from_date: str = None,
+    to_date: str = None,
+    state: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List estimates with optional filtering.
+
+    Args:
+        client_id: Only return estimates belonging to the client with the given ID
+        updated_since: Only return estimates updated since the given datetime (e.g. 2021-04-09T12:48:29Z)
+        from_date: Only return estimates with an issue_date on or after the given date (YYYY-MM-DD)
+        to_date: Only return estimates with an issue_date on or before the given date (YYYY-MM-DD)
+        state: Only return estimates with a matching state. One of: draft, sent, accepted, declined
+        page: The page number to use in pagination (default: 1)
+        per_page: The number of records to return per page (1-2000, default: 10;
+            Harvest's native default is 2000 but this is capped here because each
+            estimate includes nested line_items and long notes, and large result
+            sets can exceed MCP tool-response size limits)
+    """
+    params = {}
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if state is not None:
+        params["state"] = state
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "10"
+
+    response = await harvest_request("estimates", params)
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
