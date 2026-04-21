@@ -488,6 +488,79 @@ async def create_estimate(
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def update_estimate(
+    estimate_id: int,
+    client_id: int = None,
+    number: str = None,
+    purchase_order: str = None,
+    tax: float = None,
+    tax2: float = None,
+    discount: float = None,
+    subject: str = None,
+    notes: str = None,
+    currency: str = None,
+    issue_date: str = None,
+    line_items: list = None,
+):
+    """Update an existing estimate.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    Args:
+        estimate_id: The ID of the estimate to update (required)
+        client_id: The ID of the client this estimate belongs to
+        number: Estimate number
+        purchase_order: The purchase order number
+        tax: Tax percentage applied to the subtotal (e.g. 10.0 for 10%)
+        tax2: Second tax percentage applied to the subtotal
+        discount: Discount percentage subtracted from the subtotal
+        subject: The estimate subject
+        notes: Any additional notes to include on the estimate
+        currency: Currency code (e.g. "CHF", "EUR", "USD")
+        issue_date: Date the estimate was issued (YYYY-MM-DD)
+        line_items: Array of line item objects. To modify the estimate's
+            line items:
+            - Add a new item: include an object with kind/description/
+              quantity/unit_price/taxed/taxed2 (no "id")
+            - Update an existing item: include the item's id plus the
+              fields to change
+            - Delete an existing item: include the item's id and set
+              "_destroy": true
+            Items not referenced in the request are left untouched.
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if client_id is not None:
+        params["client_id"] = client_id
+    if number is not None:
+        params["number"] = number
+    if purchase_order is not None:
+        params["purchase_order"] = purchase_order
+    if tax is not None:
+        params["tax"] = tax
+    if tax2 is not None:
+        params["tax2"] = tax2
+    if discount is not None:
+        params["discount"] = discount
+    if subject is not None:
+        params["subject"] = subject
+    if notes is not None:
+        params["notes"] = notes
+    if currency is not None:
+        params["currency"] = currency
+    if issue_date is not None:
+        params["issue_date"] = issue_date
+    if line_items is not None:
+        params["line_items"] = line_items
+
+    response = await harvest_request(f"estimates/{estimate_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
