@@ -400,6 +400,35 @@ async def get_estimate_details(estimate_id: int):
 
 
 @mcp.tool()
+async def get_estimate_by_number(number: str | int):
+    """Retrieve an estimate by its human-readable number (e.g. "79").
+
+    The Harvest API has no direct "get by number" endpoint, so this tool
+    lists estimates internally and filters client-side. For better
+    performance when you already know the estimate's internal id, prefer
+    get_estimate_details.
+
+    Args:
+        number: The user-facing estimate number as shown in the Harvest UI
+            (e.g. "79", "1001"). Accepts a string or integer.
+    """
+    number_str = str(number)
+    page = 1
+    while True:
+        response = await harvest_request(
+            "estimates",
+            {"page": str(page), "per_page": "2000"},
+        )
+        for est in response.get("estimates", []):
+            if est.get("number") == number_str:
+                return json.dumps(est, indent=2)
+        if not response.get("next_page"):
+            break
+        page += 1
+    raise Exception(f"No estimate found with number {number_str}")
+
+
+@mcp.tool()
 async def list_estimate_messages(
     estimate_id: int,
     updated_since: str = None,
