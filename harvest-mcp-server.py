@@ -561,6 +561,31 @@ async def update_estimate(
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def change_estimate_state(estimate_id: int, event_type: str):
+    """Change the state of an estimate by creating a state-transition message.
+
+    This does not email the estimate — it only changes its state. To actually
+    email the estimate to recipients, use send_estimate_message instead.
+
+    Args:
+        estimate_id: The ID of the estimate to transition
+        event_type: One of:
+            - "send": mark a draft estimate as sent
+            - "accept": mark a sent estimate as accepted (closes it)
+            - "decline": mark a sent estimate as declined (closes it)
+            - "re-open": reopen a closed (accepted/declined) estimate back to sent
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"event_type": event_type}
+    response = await harvest_request(
+        f"estimates/{estimate_id}/messages", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
