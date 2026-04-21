@@ -55,6 +55,10 @@ async def harvest_request(path, params=None, method="GET"):
                 f"Harvest API Error: {response.status_code} {response.text}"
             )
 
+        # Some endpoints (e.g. DELETE) return 200 OK with no body
+        if not response.content:
+            return {"status": "ok"}
+
         return response.json()
 
 
