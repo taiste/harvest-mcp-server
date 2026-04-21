@@ -641,6 +641,20 @@ async def send_estimate_message(
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def delete_estimate(estimate_id: int):
+    """Delete an estimate.
+
+    Args:
+        estimate_id: The ID of the estimate to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(f"estimates/{estimate_id}", method="DELETE")
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
