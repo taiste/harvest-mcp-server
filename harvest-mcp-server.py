@@ -423,6 +423,71 @@ async def list_estimate_messages(
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def create_estimate(
+    client_id: int,
+    number: str = None,
+    purchase_order: str = None,
+    tax: float = None,
+    tax2: float = None,
+    discount: float = None,
+    subject: str = None,
+    notes: str = None,
+    currency: str = None,
+    issue_date: str = None,
+    line_items: list = None,
+):
+    """Create a new estimate.
+
+    Args:
+        client_id: The ID of the client this estimate belongs to (required)
+        number: Estimate number. If omitted, Harvest auto-generates one
+        purchase_order: The purchase order number
+        tax: Tax percentage applied to the subtotal (e.g. 10.0 for 10%)
+        tax2: Second tax percentage applied to the subtotal
+        discount: Discount percentage subtracted from the subtotal
+        subject: The estimate subject
+        notes: Any additional notes to include on the estimate
+        currency: Currency code (e.g. "CHF", "EUR", "USD"). Defaults to the client's currency
+        issue_date: Date the estimate was issued (YYYY-MM-DD). Defaults to today
+        line_items: Array of line item objects. Each item supports:
+            - kind (string, required): Estimate item category name (e.g. "Service", "Product")
+            - description (string, optional): Text description of the line item
+            - quantity (number, optional, defaults to 1): Unit quantity. Harvest's
+              docs state integer but decimals (e.g. 0.25, 0.75) are accepted in practice.
+            - unit_price (decimal, required): Individual price per unit
+            - taxed (boolean, optional, defaults to false): Whether tax applies
+            - taxed2 (boolean, optional, defaults to false): Whether tax2 applies
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"client_id": client_id}
+    if number is not None:
+        params["number"] = number
+    if purchase_order is not None:
+        params["purchase_order"] = purchase_order
+    if tax is not None:
+        params["tax"] = tax
+    if tax2 is not None:
+        params["tax2"] = tax2
+    if discount is not None:
+        params["discount"] = discount
+    if subject is not None:
+        params["subject"] = subject
+    if notes is not None:
+        params["notes"] = notes
+    if currency is not None:
+        params["currency"] = currency
+    if issue_date is not None:
+        params["issue_date"] = issue_date
+    if line_items is not None:
+        params["line_items"] = line_items
+
+    response = await harvest_request("estimates", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
