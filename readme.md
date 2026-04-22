@@ -34,6 +34,7 @@ The server provides the following functionality:
 ### Estimates
 - List estimates with filtering options (by client, state, date range, updated_since)
 - Retrieve detailed estimate information
+- Look up an estimate by its user-facing number (e.g. "79")
 - List messages associated with an estimate
 - Create new estimates with line items
 - Update existing estimates (add/update/delete line items via `_destroy`)
@@ -91,6 +92,7 @@ Once connected, you can ask Claude about your Harvest data with queries like:
 - "Get my unsubmitted timesheets from this month"
 - "Show me unsubmitted time entries for user [user_id]"
 - "Show me all accepted estimates from this quarter"
+- "Find the estimate numbered [number]"
 - "Create a draft estimate for client [client_id] with these line items..."
 - "Mark estimate [id] as sent"
 - "Email estimate [id] to client@example.com"
