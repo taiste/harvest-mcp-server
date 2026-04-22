@@ -31,6 +31,17 @@ The server provides the following functionality:
 ### Tasks
 - List available tasks with filtering options
 
+### Estimates
+- List estimates with filtering options (by client, state, date range, updated_since)
+- Retrieve detailed estimate information
+- Look up an estimate by its user-facing number (e.g. "79")
+- List messages associated with an estimate
+- Create new estimates with line items
+- Update existing estimates (add/update/delete line items via `_destroy`)
+- Change estimate state (send, accept, decline, re-open) without sending email
+- Send estimate messages (emails the estimate to recipients)
+- Delete estimates
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -80,6 +91,11 @@ Once connected, you can ask Claude about your Harvest data with queries like:
 - "List all available tasks"
 - "Get my unsubmitted timesheets from this month"
 - "Show me unsubmitted time entries for user [user_id]"
+- "Show me all accepted estimates from this quarter"
+- "Find the estimate numbered [number]"
+- "Create a draft estimate for client [client_id] with these line items..."
+- "Mark estimate [id] as sent"
+- "Email estimate [id] to client@example.com"
 
 ## Customization
 
@@ -93,7 +109,7 @@ You can modify the server code to add more functionality or customize the existi
 
 ## Read-Only Mode
 
-You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables all write operations (creating time entries, starting timers, and stopping timers) while keeping all read operations available.
+You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables all write operations (creating time entries, starting/stopping timers, creating/updating/deleting estimates, changing estimate state, and sending estimate messages) while keeping all read operations available.
 
 ```json
 {
