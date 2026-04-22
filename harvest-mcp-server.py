@@ -492,7 +492,7 @@ async def create_estimate(
     notes: str = None,
     currency: str = None,
     issue_date: str = None,
-    line_items: list = None,
+    line_items: list[dict] = None,
 ):
     """Create a new estimate.
 
@@ -558,7 +558,7 @@ async def update_estimate(
     notes: str = None,
     currency: str = None,
     issue_date: str = None,
-    line_items: list = None,
+    line_items: list[dict] = None,
 ):
     """Update an existing estimate.
 
@@ -650,7 +650,7 @@ async def change_estimate_state(estimate_id: int, event_type: str):
 @mcp.tool()
 async def send_estimate_message(
     estimate_id: int,
-    recipients: list,
+    recipients: list[dict],
     subject: str = None,
     body: str = None,
     send_me_a_copy: bool = None,
