@@ -55,8 +55,10 @@ async def harvest_request(path, params=None, method="GET"):
                 f"Harvest API Error: {response.status_code} {response.text}"
             )
 
-        # Some endpoints (e.g. DELETE) return 200 OK with no body
-        if not response.content:
+        # Harvest's DELETE endpoints may return 200 OK with no body. Scope
+        # this fallback to DELETE only — an empty body on GET/POST/PATCH is
+        # more likely a real bug that should surface as JSONDecodeError.
+        if method == "DELETE" and not response.content:
             return {"status": "ok"}
 
         return response.json()
