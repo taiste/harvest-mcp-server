@@ -101,6 +101,7 @@ async def list_time_entries(
     to_date: str = None,
     is_running: bool = None,
     is_billable: bool = None,
+    project_id: int = None,
 ):
     """List time entries with optional filtering.
 
@@ -110,6 +111,7 @@ async def list_time_entries(
         to_date: Only return time entries with a spent_date on or before the given date (YYYY-MM-DD)
         is_running: Pass true to only return running time entries and false to return non-running time entries
         is_billable: Pass true to only return billable time entries and false to return non-billable time entries
+        project_id: Filter by project ID
     """
     params = {}
     if user_id is not None:
@@ -122,6 +124,9 @@ async def list_time_entries(
         params["is_running"] = "true" if is_running else "false"
     if is_billable is not None:
         params["is_billable"] = "true" if is_billable else "false"
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+
 
     response = await harvest_request("time_entries", params)
     return json.dumps(response, indent=2)
