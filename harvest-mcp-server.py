@@ -612,6 +612,65 @@ async def get_task_assignment_details(project_id: int, task_assignment_id: int):
 
 
 @mcp.tool()
+async def create_task_assignment(
+    project_id: int,
+    task_id: int,
+    is_active: bool = None,
+    billable: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Create a task assignment, linking a task to a project.
+
+    Empirical findings (not in Harvest's docs):
+
+    1. Duplicate-task UPSERT. POSTing with a task_id that is already
+       assigned to this project does NOT return 422. Harvest treats it
+       as a partial update of the existing task_assignment: it returns
+       the existing id, bumps updated_at, and applies some (but not
+       necessarily all) provided fields. Callers expecting a conflict
+       error will instead silently mutate state. Use update_task_assignment
+       deliberately when you mean to change an existing one.
+
+    2. billable default comes from the task, not the spec. Harvest's spec
+       says billable defaults to false when omitted, but in practice it
+       defaults to the parent task's billable_by_default. Pass billable
+       explicitly if you depend on a specific value.
+
+    Args:
+        project_id: The ID of the project to assign the task to (required)
+        task_id: The ID of the task to associate with the project (required)
+        is_active: Whether the task assignment is active or archived.
+            Defaults to true
+        billable: Whether the task assignment is billable or not. See the
+            empirical note above about Harvest's actual default behavior
+        hourly_rate: Custom rate used when the project's bill_by is "Tasks".
+            Silently nulled in the response if the project's bill_by is any
+            other value — no error raised
+        budget: Per-task-assignment budget. Used when the project's
+            budget_by is "task" or "task_fees". Silently nulled in the
+            response if budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"task_id": task_id}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if billable is not None:
+        params["billable"] = billable
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
