@@ -598,6 +598,20 @@ async def list_task_assignments(
 
 
 @mcp.tool()
+async def get_task_assignment_details(project_id: int, task_assignment_id: int):
+    """Get detailed information about a specific task assignment.
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to retrieve
+    """
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
