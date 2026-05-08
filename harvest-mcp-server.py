@@ -934,6 +934,33 @@ async def update_user_assignment(
 
 
 @mcp.tool()
+async def delete_user_assignment(project_id: int, user_assignment_id: int):
+    """Delete a user assignment.
+
+    Per Harvest's docs, deletion is only possible if the user assignment
+    has no time entries OR expenses logged against it. If either exists,
+    the API returns HTTP 422 with the message "This task assignment
+    isn't removable because it has tracked time or expenses." (note
+    Harvest's own wording bug: it says "task assignment" even on the
+    user_assignments endpoint). Nothing is deleted in that case. To
+    retain history, archive the user assignment instead via
+    update_user_assignment(is_active=False).
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}",
+        method="DELETE",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
