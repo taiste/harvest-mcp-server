@@ -720,6 +720,31 @@ async def update_task_assignment(
 
 
 @mcp.tool()
+async def delete_task_assignment(project_id: int, task_assignment_id: int):
+    """Delete a task assignment.
+
+    Per Harvest's docs, deletion is only possible if the task assignment
+    has no time entries logged against it. If time entries exist, the
+    API returns HTTP 422 with the message "This task assignment isn't
+    removable because there are time entries associated with it." and
+    nothing is deleted. In that case, archive the task assignment
+    instead via update_task_assignment(is_active=False).
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}",
+        method="DELETE",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
