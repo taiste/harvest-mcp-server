@@ -813,6 +813,70 @@ async def get_user_assignment_details(project_id: int, user_assignment_id: int):
 
 
 @mcp.tool()
+async def create_user_assignment(
+    project_id: int,
+    user_id: int,
+    is_active: bool = None,
+    is_project_manager: bool = None,
+    use_default_rates: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Create a user assignment, linking a user to a project.
+
+    Empirical finding (not in Harvest's docs): POSTing with a user_id
+    that is already assigned to this project does NOT return 422.
+    Harvest returns 201 with the existing user_assignment id. Whether
+    any provided fields are then applied or silently ignored appears
+    inconsistent (no-op observed in some configurations; partial
+    application in others — likely depends on the project's bill_by /
+    budget_by). Treat the result as undefined and use
+    update_user_assignment for intentional changes.
+
+    Args:
+        project_id: The ID of the project to assign the user to (required)
+        user_id: The ID of the user to associate with the project (required)
+        is_active: Whether the user assignment is active or archived.
+            Defaults to true
+        is_project_manager: Whether the user has Project Manager
+            permissions for this project. Per Harvest's docs, defaults to
+            false for regular users and true for users who are already
+            account-wide Project Managers or Administrators
+        use_default_rates: Whether to use the user's account-default
+            billable rates for this project (true) or a custom rate
+            defined on this assignment (false). Defaults to true. Only
+            relevant when the project's bill_by is "People" — silently
+            ignored / coerced back to true when bill_by is any other value
+        hourly_rate: Custom rate used when the project's bill_by is
+            "People" AND use_default_rates is false. Silently nulled in
+            the response if the project's bill_by is any other value —
+            no error raised
+        budget: Per-user-assignment budget. Used when the project's
+            budget_by is "person". Silently nulled in the response if
+            budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"user_id": user_id}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_project_manager is not None:
+        params["is_project_manager"] = is_project_manager
+    if use_default_rates is not None:
+        params["use_default_rates"] = use_default_rates
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
