@@ -282,6 +282,22 @@ async def create_project(
 ):
     """Create a new project.
 
+    Empirical findings (not in Harvest's docs):
+
+    1. budget_by silent coercion. Values "project", "project_cost", and
+       "none" round-trip reliably. Values "task", "task_fees", and "person"
+       may be silently coerced to "none" — the API returns 200 with the
+       change rejected in the response body, no error raised. The latter
+       three appear to require account-tier features or project
+       configuration not exposed via the API surface alone. If you depend
+       on a specific budget_by, re-read the project and verify it persisted.
+
+    2. budget-cluster coupling. The fields budget, cost_budget,
+       cost_budget_include_expenses, and budget_is_monthly are silently
+       zeroed/nulled if the project's resulting budget_by is "none". To
+       activate any of them, send budget_by="project" (for budget hours)
+       or "project_cost" (for cost_budget money) in the SAME request.
+
     Args:
         client_id: The ID of the client to associate this project with (required)
         name: The name of the project (required)
@@ -292,20 +308,24 @@ async def create_project(
             all-lowercase.)
         budget_by: The method by which the project is budgeted (required). One of:
             "project", "project_cost", "task", "task_fees", "person", "none".
-            Note this is all-lowercase, unlike bill_by.
-        code: The code associated with the project
+            Note this is all-lowercase, unlike bill_by. See the function-level
+            note above about which values round-trip reliably.
+        code: The code associated with the project. Note: passing an empty
+            string ("") clears the field to null rather than storing ""
         is_active: Whether the project is active or archived. Defaults to true
         is_fixed_fee: Whether the project is a fixed-fee project or not
         hourly_rate: Rate for projects billed by Project Hourly Rate
-        budget_is_monthly: Option to have the budget reset every month. Defaults to false
+        budget_is_monthly: Option to have the budget reset every month. Defaults
+            to false. Silently ignored if budget_by="none" — see note above
         budget: The budget in HOURS for the project when budgeting by time
             (i.e. budget_by="project", "task", or "person"). Use cost_budget for
-            money-based budgets.
+            money-based budgets. Silently nulled if budget_by="none"
         cost_budget: The MONETARY budget for the project when budgeting by money
             (i.e. budget_by="project_cost" or "task_fees"). Use budget for
-            hours-based budgets.
+            hours-based budgets. Silently nulled if budget_by="none"
         cost_budget_include_expenses: Option for budget of Total Project Fees
-            projects to include tracked expenses. Defaults to false
+            projects to include tracked expenses. Defaults to false. Silently
+            ignored if budget_by="none"
         notify_when_over_budget: Whether Project Managers should be notified when
             the project goes over budget. Defaults to false
         over_budget_notification_percentage: Percentage value used to trigger
@@ -360,6 +380,151 @@ async def create_project(
         params["ends_on"] = ends_on
 
     response = await harvest_request("projects", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_project(
+    project_id: int,
+    client_id: int = None,
+    name: str = None,
+    code: str = None,
+    is_active: bool = None,
+    is_billable: bool = None,
+    is_fixed_fee: bool = None,
+    bill_by: str = None,
+    hourly_rate: float = None,
+    budget_by: str = None,
+    budget_is_monthly: bool = None,
+    budget: float = None,
+    cost_budget: float = None,
+    cost_budget_include_expenses: bool = None,
+    notify_when_over_budget: bool = None,
+    over_budget_notification_percentage: float = None,
+    show_budget_to_all: bool = None,
+    fee: float = None,
+    notes: str = None,
+    starts_on: str = None,
+    ends_on: str = None,
+):
+    """Update an existing project.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    To archive a project (instead of deleting it and losing all its
+    time entries and expenses), pass is_active=False.
+
+    Empirical findings (not in Harvest's docs):
+
+    1. budget_by silent coercion. Values "project", "project_cost", and
+       "none" round-trip reliably. Values "task", "task_fees", and "person"
+       may be silently coerced to "none" — the API returns 200 with the
+       value rejected in the response body, no error raised. The latter
+       three appear to require account-tier features or configuration not
+       exposed via the API surface. Re-read after the call to verify.
+
+    2. budget-cluster coupling. The fields budget, cost_budget,
+       cost_budget_include_expenses, and budget_is_monthly are silently
+       zeroed/nulled when the project's resulting budget_by is "none". To
+       set or change any of them, send budget_by="project" (for budget
+       hours) or "project_cost" (for cost_budget money) in the SAME PATCH;
+       sending the cluster field alone with stored budget_by="none" is a
+       no-op even though the response is 200.
+
+    3. Empty-string clearing differs by field. Passing code="" clears the
+       value to null on the server. Passing notes="" round-trips as the
+       empty string. The two text fields use different clearing semantics.
+
+    Args:
+        project_id: The ID of the project to update
+        client_id: The ID of the client to associate this project with
+        name: The name of the project
+        code: The code associated with the project. Passing "" clears the
+            field to null
+        is_active: Whether the project is active or archived. Pass False
+            to archive — this is the recommended alternative to delete_project
+        is_billable: Whether the project is billable or not
+        is_fixed_fee: Whether the project is a fixed-fee project or not
+        bill_by: The method by which the project is invoiced. One of:
+            "Project", "Tasks", "People", "none". Note the mixed casing —
+            distinct from budget_by, which is all-lowercase
+        hourly_rate: Rate for projects billed by Project Hourly Rate
+        budget_by: The method by which the project is budgeted. One of:
+            "project", "project_cost", "task", "task_fees", "person", "none".
+            Note this is all-lowercase, unlike bill_by. See the function-level
+            empirical note about which values round-trip reliably.
+        budget_is_monthly: Option to have the budget reset every month.
+            Silently ignored if budget_by ends up as "none"
+        budget: The budget in HOURS for the project when budgeting by time
+            (i.e. budget_by="project", "task", or "person"). Silently nulled
+            if budget_by ends up as "none" — pair with budget_by in the same
+            call to set this field
+        cost_budget: The MONETARY budget for the project when budgeting by
+            money (i.e. budget_by="project_cost" or "task_fees"). Silently
+            nulled if budget_by ends up as "none" — pair with budget_by in
+            the same call to set this field
+        cost_budget_include_expenses: Option for budget of Total Project
+            Fees projects to include tracked expenses. Silently ignored if
+            budget_by ends up as "none"
+        notify_when_over_budget: Whether Project Managers should be notified
+            when the project goes over budget
+        over_budget_notification_percentage: Percentage value used to
+            trigger over-budget email alerts (e.g. 10.0 for 10.0%)
+        show_budget_to_all: Option to show project budget to all employees.
+            Does not apply to Total Project Fee projects
+        fee: The amount you plan to invoice for the project. Only used by
+            fixed-fee projects
+        notes: Project notes. Passing "" stores the empty string (unlike code)
+        starts_on: Date the project was started (YYYY-MM-DD)
+        ends_on: Date the project will end (YYYY-MM-DD)
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if client_id is not None:
+        params["client_id"] = client_id
+    if name is not None:
+        params["name"] = name
+    if code is not None:
+        params["code"] = code
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_billable is not None:
+        params["is_billable"] = is_billable
+    if is_fixed_fee is not None:
+        params["is_fixed_fee"] = is_fixed_fee
+    if bill_by is not None:
+        params["bill_by"] = bill_by
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget_by is not None:
+        params["budget_by"] = budget_by
+    if budget_is_monthly is not None:
+        params["budget_is_monthly"] = budget_is_monthly
+    if budget is not None:
+        params["budget"] = budget
+    if cost_budget is not None:
+        params["cost_budget"] = cost_budget
+    if cost_budget_include_expenses is not None:
+        params["cost_budget_include_expenses"] = cost_budget_include_expenses
+    if notify_when_over_budget is not None:
+        params["notify_when_over_budget"] = notify_when_over_budget
+    if over_budget_notification_percentage is not None:
+        params["over_budget_notification_percentage"] = over_budget_notification_percentage
+    if show_budget_to_all is not None:
+        params["show_budget_to_all"] = show_budget_to_all
+    if fee is not None:
+        params["fee"] = fee
+    if notes is not None:
+        params["notes"] = notes
+    if starts_on is not None:
+        params["starts_on"] = starts_on
+    if ends_on is not None:
+        params["ends_on"] = ends_on
+
+    response = await harvest_request(f"projects/{project_id}", params, method="PATCH")
     return json.dumps(response, indent=2)
 
 
