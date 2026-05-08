@@ -529,6 +529,27 @@ async def update_project(
 
 
 @mcp.tool()
+async def delete_project(project_id: int):
+    """Delete a project.
+
+    DESTRUCTIVE: deletes the project AND all time entries and expenses
+    tracked to it. Invoices associated with the project are NOT deleted.
+
+    If you want to retain the project's time entries and expenses,
+    archive the project instead by calling update_project with
+    is_active=False — this is Harvest's documented recommendation.
+
+    Args:
+        project_id: The ID of the project to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(f"projects/{project_id}", method="DELETE")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
