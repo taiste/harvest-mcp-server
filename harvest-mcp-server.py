@@ -799,6 +799,20 @@ async def list_user_assignments(
 
 
 @mcp.tool()
+async def get_user_assignment_details(project_id: int, user_assignment_id: int):
+    """Get detailed information about a specific user assignment.
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to retrieve
+    """
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
