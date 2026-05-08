@@ -877,6 +877,63 @@ async def create_user_assignment(
 
 
 @mcp.tool()
+async def update_user_assignment(
+    project_id: int,
+    user_assignment_id: int,
+    is_active: bool = None,
+    is_project_manager: bool = None,
+    use_default_rates: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Update an existing user assignment.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to update
+        is_active: Whether the user assignment is active or archived
+        is_project_manager: Whether the user has Project Manager
+            permissions for this project
+        use_default_rates: Whether to use the user's account-default
+            billable rates (true) or a custom rate defined on this
+            assignment (false). Only relevant when the project's bill_by
+            is "People" — silently ignored / coerced back to true when
+            bill_by is any other value
+        hourly_rate: Custom rate used when the project's bill_by is
+            "People" AND use_default_rates is false. Silently nulled in
+            the response if the project's bill_by is any other value —
+            no error raised
+        budget: Per-user-assignment budget. Used when the project's
+            budget_by is "person". Silently nulled in the response if
+            budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_project_manager is not None:
+        params["is_project_manager"] = is_project_manager
+    if use_default_rates is not None:
+        params["use_default_rates"] = use_default_rates
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}",
+        params,
+        method="PATCH",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
