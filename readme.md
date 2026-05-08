@@ -131,7 +131,7 @@ You can modify the server code to add more functionality or customize the existi
 
 ## Read-Only Mode
 
-You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables all write operations (creating time entries, starting/stopping timers, creating/updating/deleting estimates, changing estimate state, sending estimate messages, creating/updating/deleting projects, and creating/updating/deleting task and user assignments) while keeping all read operations available.
+You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables all write operations (creating time entries, starting/stopping timers, creating/updating/deleting estimates, changing estimate state, sending estimate messages, and creating/updating/deleting projects, task assignments, and user assignments) while keeping all read operations available.
 
 ```json
 {

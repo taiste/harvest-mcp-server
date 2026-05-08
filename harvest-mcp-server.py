@@ -284,19 +284,24 @@ async def create_project(
 
     Empirical findings (not in Harvest's docs):
 
-    1. budget_by silent coercion. Values "project", "project_cost", and
-       "none" round-trip reliably. Values "task", "task_fees", and "person"
-       may be silently coerced to "none" — the API returns 200 with the
-       change rejected in the response body, no error raised. The latter
-       three appear to require account-tier features or project
-       configuration not exposed via the API surface alone. If you depend
-       on a specific budget_by, re-read the project and verify it persisted.
+    1. budget_by acceptance is unpredictable from the API surface alone.
+       Only "none" is unconditionally accepted. Every other value
+       ("project", "project_cost", "task", "task_fees", "person") has
+       been observed to silently coerce to "none" (HTTP 200, no error)
+       in at least one tested project/account state. The behavior
+       depends on the account's plan tier, the authenticated user's
+       role, the project's existing assignments, and (per finding 2
+       below) whether you pair the value with its companion budget /
+       cost_budget field in the same request. If you depend on a
+       specific budget_by, re-read after the call and verify it persisted.
 
     2. budget-cluster coupling. The fields budget, cost_budget,
        cost_budget_include_expenses, and budget_is_monthly are silently
        zeroed/nulled if the project's resulting budget_by is "none". To
        activate any of them, send budget_by="project" (for budget hours)
-       or "project_cost" (for cost_budget money) in the SAME request.
+       or "project_cost" (for cost_budget money) in the SAME request —
+       sending budget_by alone, without the cluster field, frequently
+       results in coerce-to-none.
 
     Args:
         client_id: The ID of the client to associate this project with (required)
@@ -417,12 +422,16 @@ async def update_project(
 
     Empirical findings (not in Harvest's docs):
 
-    1. budget_by silent coercion. Values "project", "project_cost", and
-       "none" round-trip reliably. Values "task", "task_fees", and "person"
-       may be silently coerced to "none" — the API returns 200 with the
-       value rejected in the response body, no error raised. The latter
-       three appear to require account-tier features or configuration not
-       exposed via the API surface. Re-read after the call to verify.
+    1. budget_by acceptance is unpredictable from the API surface alone.
+       Only "none" is unconditionally accepted. Every other value
+       ("project", "project_cost", "task", "task_fees", "person") has
+       been observed to silently coerce to "none" (HTTP 200, no error)
+       in at least one tested project/account state. The behavior
+       depends on the account's plan tier, the authenticated user's
+       role, the project's existing assignments, and (per finding 2
+       below) whether you pair the value with its companion budget /
+       cost_budget field in the same request. Re-read after the call
+       and verify it persisted.
 
     2. budget-cluster coupling. The fields budget, cost_budget,
        cost_budget_include_expenses, and budget_is_monthly are silently
@@ -430,7 +439,8 @@ async def update_project(
        set or change any of them, send budget_by="project" (for budget
        hours) or "project_cost" (for cost_budget money) in the SAME PATCH;
        sending the cluster field alone with stored budget_by="none" is a
-       no-op even though the response is 200.
+       no-op even though the response is 200. Sending budget_by alone,
+       without the cluster field, frequently results in coerce-to-none.
 
     3. Empty-string clearing differs by field. Passing code="" clears the
        value to null on the server. Passing notes="" round-trips as the
@@ -625,12 +635,15 @@ async def create_task_assignment(
     Empirical findings (not in Harvest's docs):
 
     1. Duplicate-task UPSERT. POSTing with a task_id that is already
-       assigned to this project does NOT return 422. Harvest treats it
-       as a partial update of the existing task_assignment: it returns
-       the existing id, bumps updated_at, and applies some (but not
-       necessarily all) provided fields. Callers expecting a conflict
-       error will instead silently mutate state. Use update_task_assignment
-       deliberately when you mean to change an existing one.
+       assigned to this project does NOT return 422. Harvest returns 201
+       with the existing task_assignment id and applies any provided
+       fields the project's bill_by/budget_by accept (so e.g. is_active
+       and billable always apply; hourly_rate and budget apply only when
+       the parent project's bill_by/budget_by match — otherwise they
+       follow the standard silent-null rules described per-field below).
+       Callers expecting a conflict error will instead silently mutate
+       state. Use update_task_assignment deliberately when you mean to
+       change an existing one.
 
     2. billable default comes from the task, not the spec. Harvest's spec
        says billable defaults to false when omitted, but in practice it
@@ -725,10 +738,11 @@ async def delete_task_assignment(project_id: int, task_assignment_id: int):
 
     Per Harvest's docs, deletion is only possible if the task assignment
     has no time entries logged against it. If time entries exist, the
-    API returns HTTP 422 with the message "This task assignment isn't
-    removable because there are time entries associated with it." and
-    nothing is deleted. In that case, archive the task assignment
-    instead via update_task_assignment(is_active=False).
+    API returns HTTP 422 with the message "This task assignment isn’t
+    removable because there are time entries associated with it." (note
+    the typographic apostrophe U+2019 in "isn’t") and nothing is
+    deleted. In that case, archive the task assignment instead via
+    update_task_assignment(is_active=False).
 
     Args:
         project_id: The ID of the project the task assignment belongs to
@@ -826,12 +840,10 @@ async def create_user_assignment(
 
     Empirical finding (not in Harvest's docs): POSTing with a user_id
     that is already assigned to this project does NOT return 422.
-    Harvest returns 201 with the existing user_assignment id. Whether
-    any provided fields are then applied or silently ignored appears
-    inconsistent (no-op observed in some configurations; partial
-    application in others — likely depends on the project's bill_by /
-    budget_by). Treat the result as undefined and use
-    update_user_assignment for intentional changes.
+    Harvest returns 201 with the existing user_assignment id, and any
+    fields you provide on the request are silently dropped — the
+    response and a subsequent GET both show the assignment unchanged.
+    To change an existing user assignment, use update_user_assignment.
 
     Args:
         project_id: The ID of the project to assign the user to (required)
@@ -850,7 +862,9 @@ async def create_user_assignment(
         hourly_rate: Custom rate used when the project's bill_by is
             "People" AND use_default_rates is false. Silently nulled in
             the response if the project's bill_by is any other value —
-            no error raised
+            no error raised. Note: when bill_by is "People" and
+            use_default_rates is true, the response shows the user's
+            account-default billable rate, not 0
         budget: Per-user-assignment budget. Used when the project's
             budget_by is "person". Silently nulled in the response if
             budget_by is any other value — no error raised
@@ -940,10 +954,11 @@ async def delete_user_assignment(project_id: int, user_assignment_id: int):
     Per Harvest's docs, deletion is only possible if the user assignment
     has no time entries OR expenses logged against it. If either exists,
     the API returns HTTP 422 with the message "This task assignment
-    isn't removable because it has tracked time or expenses." (note
-    Harvest's own wording bug: it says "task assignment" even on the
-    user_assignments endpoint). Nothing is deleted in that case. To
-    retain history, archive the user assignment instead via
+    isn’t removable because it has tracked time or expenses." (note two
+    Harvest-side quirks: the message uses a typographic apostrophe
+    U+2019, and it says "task assignment" even though the endpoint is
+    user_assignments). Nothing is deleted in that case. To retain
+    history, archive the user assignment instead via
     update_user_assignment(is_active=False).
 
     Args:
