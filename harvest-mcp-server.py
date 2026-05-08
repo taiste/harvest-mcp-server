@@ -671,6 +671,55 @@ async def create_task_assignment(
 
 
 @mcp.tool()
+async def update_task_assignment(
+    project_id: int,
+    task_assignment_id: int,
+    is_active: bool = None,
+    billable: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Update an existing task assignment.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to update
+        is_active: Whether the task assignment is active or archived
+        billable: Whether the task assignment is billable or not. When
+            true, time tracked against this task on this project is marked
+            billable
+        hourly_rate: Custom rate used when the project's bill_by is "Tasks".
+            Silently nulled in the response if the project's bill_by is any
+            other value — no error raised
+        budget: Per-task-assignment budget. Used when the project's
+            budget_by is "task" or "task_fees". Silently nulled in the
+            response if budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if billable is not None:
+        params["billable"] = billable
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}",
+        params,
+        method="PATCH",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
