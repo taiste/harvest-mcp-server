@@ -550,6 +550,54 @@ async def delete_project(project_id: int):
 
 
 @mcp.tool()
+async def list_task_assignments(
+    project_id: int = None,
+    is_active: bool = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List task assignments with optional filtering.
+
+    A task assignment links a Harvest task to a project, with optional
+    per-assignment billable flag, hourly rate, and budget.
+
+    Without project_id, lists task assignments across the whole account
+    (GET /v2/task_assignments). With project_id, lists task assignments
+    for that project only (GET /v2/projects/{id}/task_assignments).
+
+    Args:
+        project_id: If provided, scope to this project's task assignments.
+            If omitted, list all task assignments in the account.
+        is_active: Pass true to only return active task assignments and
+            false to return inactive ones
+        updated_since: Only return task assignments updated since the
+            given datetime (e.g. 2021-04-09T12:48:29Z)
+        page: The page number to use in pagination (default: 1). Deprecated
+            by Harvest in favor of cursor-based pagination via the response's
+            links.next URL.
+        per_page: The number of records to return per page (1-2000, default: 2000)
+    """
+    params = {}
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    path = (
+        f"projects/{project_id}/task_assignments"
+        if project_id is not None
+        else "task_assignments"
+    )
+    response = await harvest_request(path, params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
