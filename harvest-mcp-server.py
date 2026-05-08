@@ -258,6 +258,112 @@ async def get_project_details(project_id: int):
 
 
 @mcp.tool()
+async def create_project(
+    client_id: int,
+    name: str,
+    is_billable: bool,
+    bill_by: str,
+    budget_by: str,
+    code: str = None,
+    is_active: bool = None,
+    is_fixed_fee: bool = None,
+    hourly_rate: float = None,
+    budget_is_monthly: bool = None,
+    budget: float = None,
+    cost_budget: float = None,
+    cost_budget_include_expenses: bool = None,
+    notify_when_over_budget: bool = None,
+    over_budget_notification_percentage: float = None,
+    show_budget_to_all: bool = None,
+    fee: float = None,
+    notes: str = None,
+    starts_on: str = None,
+    ends_on: str = None,
+):
+    """Create a new project.
+
+    Args:
+        client_id: The ID of the client to associate this project with (required)
+        name: The name of the project (required)
+        is_billable: Whether the project is billable or not (required)
+        bill_by: The method by which the project is invoiced (required). One of:
+            "Project", "Tasks", "People", "none". Note the mixed casing — Harvest's
+            API expects exactly these values. (Distinct from budget_by, which is
+            all-lowercase.)
+        budget_by: The method by which the project is budgeted (required). One of:
+            "project", "project_cost", "task", "task_fees", "person", "none".
+            Note this is all-lowercase, unlike bill_by.
+        code: The code associated with the project
+        is_active: Whether the project is active or archived. Defaults to true
+        is_fixed_fee: Whether the project is a fixed-fee project or not
+        hourly_rate: Rate for projects billed by Project Hourly Rate
+        budget_is_monthly: Option to have the budget reset every month. Defaults to false
+        budget: The budget in HOURS for the project when budgeting by time
+            (i.e. budget_by="project", "task", or "person"). Use cost_budget for
+            money-based budgets.
+        cost_budget: The MONETARY budget for the project when budgeting by money
+            (i.e. budget_by="project_cost" or "task_fees"). Use budget for
+            hours-based budgets.
+        cost_budget_include_expenses: Option for budget of Total Project Fees
+            projects to include tracked expenses. Defaults to false
+        notify_when_over_budget: Whether Project Managers should be notified when
+            the project goes over budget. Defaults to false
+        over_budget_notification_percentage: Percentage value used to trigger
+            over-budget email alerts (e.g. 10.0 for 10.0%)
+        show_budget_to_all: Option to show project budget to all employees.
+            Defaults to false. Does not apply to Total Project Fee projects
+        fee: The amount you plan to invoice for the project. Only used by
+            fixed-fee projects
+        notes: Project notes
+        starts_on: Date the project was started (YYYY-MM-DD)
+        ends_on: Date the project will end (YYYY-MM-DD)
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {
+        "client_id": client_id,
+        "name": name,
+        "is_billable": is_billable,
+        "bill_by": bill_by,
+        "budget_by": budget_by,
+    }
+    if code is not None:
+        params["code"] = code
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_fixed_fee is not None:
+        params["is_fixed_fee"] = is_fixed_fee
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget_is_monthly is not None:
+        params["budget_is_monthly"] = budget_is_monthly
+    if budget is not None:
+        params["budget"] = budget
+    if cost_budget is not None:
+        params["cost_budget"] = cost_budget
+    if cost_budget_include_expenses is not None:
+        params["cost_budget_include_expenses"] = cost_budget_include_expenses
+    if notify_when_over_budget is not None:
+        params["notify_when_over_budget"] = notify_when_over_budget
+    if over_budget_notification_percentage is not None:
+        params["over_budget_notification_percentage"] = over_budget_notification_percentage
+    if show_budget_to_all is not None:
+        params["show_budget_to_all"] = show_budget_to_all
+    if fee is not None:
+        params["fee"] = fee
+    if notes is not None:
+        params["notes"] = notes
+    if starts_on is not None:
+        params["starts_on"] = starts_on
+    if ends_on is not None:
+        params["ends_on"] = ends_on
+
+    response = await harvest_request("projects", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
 async def list_clients(is_active: bool = None):
     """List clients with optional filtering.
 
