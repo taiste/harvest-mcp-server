@@ -103,31 +103,47 @@ async def get_user_details(user_id: int):
 @mcp.tool()
 async def list_time_entries(
     user_id: int = None,
+    client_id: int = None,
+    project_id: int = None,
+    task_id: int = None,
     from_date: str = None,
     to_date: str = None,
+    updated_since: str = None,
     is_running: bool = None,
-    is_billable: bool = None,
+    is_billed: bool = None,
 ):
     """List time entries with optional filtering.
 
     Args:
         user_id: Filter by user ID
+        client_id: Filter by client ID
+        project_id: Filter by project ID
+        task_id: Filter by task ID
         from_date: Only return time entries with a spent_date on or after the given date (YYYY-MM-DD)
         to_date: Only return time entries with a spent_date on or before the given date (YYYY-MM-DD)
+        updated_since: Only return time entries updated since the given datetime (ISO 8601)
         is_running: Pass true to only return running time entries and false to return non-running time entries
-        is_billable: Pass true to only return billable time entries and false to return non-billable time entries
+        is_billed: Pass true to only return invoiced time entries and false to return uninvoiced time entries
     """
     params = {}
     if user_id is not None:
         params["user_id"] = str(user_id)
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if task_id is not None:
+        params["task_id"] = str(task_id)
     if from_date is not None:
         params["from"] = from_date
     if to_date is not None:
         params["to"] = to_date
+    if updated_since is not None:
+        params["updated_since"] = updated_since
     if is_running is not None:
         params["is_running"] = "true" if is_running else "false"
-    if is_billable is not None:
-        params["is_billable"] = "true" if is_billable else "false"
+    if is_billed is not None:
+        params["is_billed"] = "true" if is_billed else "false"
 
     response = await harvest_request("time_entries", params)
     return json.dumps(response, indent=2)
