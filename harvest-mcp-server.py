@@ -732,6 +732,198 @@ async def delete_estimate(estimate_id: int):
     return json.dumps(response, indent=2)
 
 
+@mcp.tool()
+async def report_time_by_clients(
+    from_date: str = None,
+    to_date: str = None,
+    project_id: int = None,
+    client_id: int = None,
+    user_id: int = None,
+    billable: bool = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """Return hours totaled by client from the Harvest time reporting API.
+
+    Results include total_hours, billable_hours, billable_amount, and
+    currency per client for the requested date range.
+
+    Args:
+        from_date: Start date in YYYY-MM-DD format (inclusive)
+        to_date: End date in YYYY-MM-DD format (inclusive)
+        project_id: Only include hours logged to this project
+        client_id: Only include hours logged to this client
+        user_id: Only include hours logged by this user
+        billable: Pass true to return only billable entries, false for non-billable
+        page: Page number for pagination
+        per_page: Records per page (1-2000)
+    """
+    params = {}
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if user_id is not None:
+        params["user_id"] = str(user_id)
+    if billable is not None:
+        params["billable"] = "true" if billable else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    response = await harvest_request("reports/time/clients", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def report_time_by_projects(
+    from_date: str = None,
+    to_date: str = None,
+    project_id: int = None,
+    client_id: int = None,
+    user_id: int = None,
+    billable: bool = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """Return hours totaled by project from the Harvest time reporting API.
+
+    Results include total_hours, billable_hours, billable_amount, and
+    currency per project for the requested date range.
+
+    Args:
+        from_date: Start date in YYYY-MM-DD format (inclusive)
+        to_date: End date in YYYY-MM-DD format (inclusive)
+        project_id: Only include hours logged to this specific project
+        client_id: Only include hours logged to projects belonging to this client
+        user_id: Only include hours logged by this user
+        billable: Pass true to return only billable entries, false for non-billable
+        page: Page number for pagination
+        per_page: Records per page (1-2000)
+    """
+    params = {}
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if user_id is not None:
+        params["user_id"] = str(user_id)
+    if billable is not None:
+        params["billable"] = "true" if billable else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    response = await harvest_request("reports/time/projects", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def report_time_by_tasks(
+    from_date: str = None,
+    to_date: str = None,
+    project_id: int = None,
+    client_id: int = None,
+    user_id: int = None,
+    billable: bool = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """Return hours totaled by task from the Harvest time reporting API.
+
+    Results include total_hours, billable_hours, billable_amount, and
+    currency per task for the requested date range.
+
+    Args:
+        from_date: Start date in YYYY-MM-DD format (inclusive)
+        to_date: End date in YYYY-MM-DD format (inclusive)
+        project_id: Only include hours logged to this project
+        client_id: Only include hours logged to projects belonging to this client
+        user_id: Only include hours logged by this user
+        billable: Pass true to return only billable entries, false for non-billable
+        page: Page number for pagination
+        per_page: Records per page (1-2000)
+    """
+    params = {}
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if user_id is not None:
+        params["user_id"] = str(user_id)
+    if billable is not None:
+        params["billable"] = "true" if billable else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    response = await harvest_request("reports/time/tasks", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def report_time_by_team(
+    from_date: str = None,
+    to_date: str = None,
+    project_id: int = None,
+    client_id: int = None,
+    user_id: int = None,
+    billable: bool = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """Return hours totaled by team member from the Harvest time reporting API.
+
+    Results include total_hours, billable_hours, billable_amount, and
+    currency per user for the requested date range.
+
+    Args:
+        from_date: Start date in YYYY-MM-DD format (inclusive)
+        to_date: End date in YYYY-MM-DD format (inclusive)
+        project_id: Only include hours logged to this project
+        client_id: Only include hours logged to projects belonging to this client
+        user_id: Only include hours logged by this specific user
+        billable: Pass true to return only billable entries, false for non-billable
+        page: Page number for pagination
+        per_page: Records per page (1-2000)
+    """
+    params = {}
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if user_id is not None:
+        params["user_id"] = str(user_id)
+    if billable is not None:
+        params["billable"] = "true" if billable else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    response = await harvest_request("reports/time/team", params)
+    return json.dumps(response, indent=2)
+
+
 if __name__ == "__main__":
     # Initialize and run the server
     mcp.run(transport="stdio")
