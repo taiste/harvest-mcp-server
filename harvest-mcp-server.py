@@ -734,12 +734,10 @@ async def delete_estimate(estimate_id: int):
 
 @mcp.tool()
 async def report_time_by_clients(
-    from_date: str = None,
-    to_date: str = None,
-    project_id: int = None,
+    from_date: str,
+    to_date: str,
     client_id: int = None,
-    user_id: int = None,
-    billable: bool = None,
+    include_fixed_fee: bool = None,
     page: int = None,
     per_page: int = None,
 ):
@@ -748,46 +746,48 @@ async def report_time_by_clients(
     Results include total_hours, billable_hours, billable_amount, and
     currency per client for the requested date range.
 
+    Note: the Harvest reporting API only accepts from/to as server-side
+    filters. client_id filtering is applied client-side on the returned
+    results.
+
     Args:
-        from_date: Start date in YYYY-MM-DD format (inclusive)
-        to_date: End date in YYYY-MM-DD format (inclusive)
-        project_id: Only include hours logged to this project
-        client_id: Only include hours logged to this client
-        user_id: Only include hours logged by this user
-        billable: Pass true to return only billable entries, false for non-billable
+        from_date: Start date in YYYY-MM-DD format (inclusive, required)
+        to_date: End date in YYYY-MM-DD format (inclusive, required).
+            Range cannot exceed 365 days.
+        client_id: Narrow results to a single client (applied client-side)
+        include_fixed_fee: When true, calculates billable amounts for
+            fixed-fee projects
         page: Page number for pagination
-        per_page: Records per page (1-2000)
+        per_page: Records per page (1-2000, default 2000)
     """
-    params = {}
-    if from_date is not None:
-        params["from"] = from_date
-    if to_date is not None:
-        params["to"] = to_date
-    if project_id is not None:
-        params["project_id"] = str(project_id)
-    if client_id is not None:
-        params["client_id"] = str(client_id)
-    if user_id is not None:
-        params["user_id"] = str(user_id)
-    if billable is not None:
-        params["billable"] = "true" if billable else "false"
+    params: dict = {"from": from_date, "to": to_date}
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
     if page is not None:
         params["page"] = str(page)
     if per_page is not None:
         params["per_page"] = str(per_page)
 
     response = await harvest_request("reports/time/clients", params)
+
+    # client_id is not a supported API query param — filter the results here
+    if client_id is not None:
+        response["results"] = [
+            r for r in response.get("results", [])
+            if r.get("client_id") == client_id
+        ]
+
     return json.dumps(response, indent=2)
 
 
 @mcp.tool()
 async def report_time_by_projects(
-    from_date: str = None,
-    to_date: str = None,
+    from_date: str,
+    to_date: str,
     project_id: int = None,
     client_id: int = None,
-    user_id: int = None,
-    billable: bool = None,
+    include_fixed_fee: bool = None,
+    include_forecast: bool = None,
     page: int = None,
     per_page: int = None,
 ):
@@ -796,46 +796,52 @@ async def report_time_by_projects(
     Results include total_hours, billable_hours, billable_amount, and
     currency per project for the requested date range.
 
+    Note: the Harvest reporting API only accepts from/to as server-side
+    filters. project_id and client_id filtering are applied client-side
+    on the returned results.
+
     Args:
-        from_date: Start date in YYYY-MM-DD format (inclusive)
-        to_date: End date in YYYY-MM-DD format (inclusive)
-        project_id: Only include hours logged to this specific project
-        client_id: Only include hours logged to projects belonging to this client
-        user_id: Only include hours logged by this user
-        billable: Pass true to return only billable entries, false for non-billable
+        from_date: Start date in YYYY-MM-DD format (inclusive, required)
+        to_date: End date in YYYY-MM-DD format (inclusive, required).
+            Range cannot exceed 365 days.
+        project_id: Narrow results to a single project (applied client-side)
+        client_id: Narrow results to projects belonging to this client
+            (applied client-side)
+        include_fixed_fee: When true, calculates billable amounts for
+            fixed-fee projects
+        include_forecast: When true, includes scheduled hours from Forecast
         page: Page number for pagination
-        per_page: Records per page (1-2000)
+        per_page: Records per page (1-2000, default 2000)
     """
-    params = {}
-    if from_date is not None:
-        params["from"] = from_date
-    if to_date is not None:
-        params["to"] = to_date
-    if project_id is not None:
-        params["project_id"] = str(project_id)
-    if client_id is not None:
-        params["client_id"] = str(client_id)
-    if user_id is not None:
-        params["user_id"] = str(user_id)
-    if billable is not None:
-        params["billable"] = "true" if billable else "false"
+    params: dict = {"from": from_date, "to": to_date}
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if include_forecast is not None:
+        params["include_forecast"] = "true" if include_forecast else "false"
     if page is not None:
         params["page"] = str(page)
     if per_page is not None:
         params["per_page"] = str(per_page)
 
     response = await harvest_request("reports/time/projects", params)
+
+    # project_id and client_id are not supported API query params — filter here
+    if project_id is not None or client_id is not None:
+        results = response.get("results", [])
+        if project_id is not None:
+            results = [r for r in results if r.get("project_id") == project_id]
+        if client_id is not None:
+            results = [r for r in results if r.get("client_id") == client_id]
+        response["results"] = results
+
     return json.dumps(response, indent=2)
 
 
 @mcp.tool()
 async def report_time_by_tasks(
-    from_date: str = None,
-    to_date: str = None,
-    project_id: int = None,
-    client_id: int = None,
-    user_id: int = None,
-    billable: bool = None,
+    from_date: str,
+    to_date: str,
+    include_fixed_fee: bool = None,
     page: int = None,
     per_page: int = None,
 ):
@@ -844,29 +850,22 @@ async def report_time_by_tasks(
     Results include total_hours, billable_hours, billable_amount, and
     currency per task for the requested date range.
 
+    Note: the Harvest reporting API only accepts from/to as server-side
+    filters for this endpoint. To narrow by project or client, use
+    report_time_by_projects instead and group manually.
+
     Args:
-        from_date: Start date in YYYY-MM-DD format (inclusive)
-        to_date: End date in YYYY-MM-DD format (inclusive)
-        project_id: Only include hours logged to this project
-        client_id: Only include hours logged to projects belonging to this client
-        user_id: Only include hours logged by this user
-        billable: Pass true to return only billable entries, false for non-billable
+        from_date: Start date in YYYY-MM-DD format (inclusive, required)
+        to_date: End date in YYYY-MM-DD format (inclusive, required).
+            Range cannot exceed 365 days.
+        include_fixed_fee: When true, calculates billable amounts for
+            fixed-fee projects
         page: Page number for pagination
-        per_page: Records per page (1-2000)
+        per_page: Records per page (1-2000, default 2000)
     """
-    params = {}
-    if from_date is not None:
-        params["from"] = from_date
-    if to_date is not None:
-        params["to"] = to_date
-    if project_id is not None:
-        params["project_id"] = str(project_id)
-    if client_id is not None:
-        params["client_id"] = str(client_id)
-    if user_id is not None:
-        params["user_id"] = str(user_id)
-    if billable is not None:
-        params["billable"] = "true" if billable else "false"
+    params: dict = {"from": from_date, "to": to_date}
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
     if page is not None:
         params["page"] = str(page)
     if per_page is not None:
@@ -878,12 +877,11 @@ async def report_time_by_tasks(
 
 @mcp.tool()
 async def report_time_by_team(
-    from_date: str = None,
-    to_date: str = None,
-    project_id: int = None,
-    client_id: int = None,
+    from_date: str,
+    to_date: str,
     user_id: int = None,
-    billable: bool = None,
+    include_fixed_fee: bool = None,
+    include_forecast: bool = None,
     page: int = None,
     per_page: int = None,
 ):
@@ -892,35 +890,40 @@ async def report_time_by_team(
     Results include total_hours, billable_hours, billable_amount, and
     currency per user for the requested date range.
 
+    Note: the Harvest reporting API only accepts from/to as server-side
+    filters. user_id filtering is applied client-side on the returned
+    results.
+
     Args:
-        from_date: Start date in YYYY-MM-DD format (inclusive)
-        to_date: End date in YYYY-MM-DD format (inclusive)
-        project_id: Only include hours logged to this project
-        client_id: Only include hours logged to projects belonging to this client
-        user_id: Only include hours logged by this specific user
-        billable: Pass true to return only billable entries, false for non-billable
+        from_date: Start date in YYYY-MM-DD format (inclusive, required)
+        to_date: End date in YYYY-MM-DD format (inclusive, required).
+            Range cannot exceed 365 days.
+        user_id: Narrow results to a single team member (applied client-side)
+        include_fixed_fee: When true, calculates billable amounts for
+            fixed-fee projects
+        include_forecast: When true, includes scheduled hours from Forecast
         page: Page number for pagination
-        per_page: Records per page (1-2000)
+        per_page: Records per page (1-2000, default 2000)
     """
-    params = {}
-    if from_date is not None:
-        params["from"] = from_date
-    if to_date is not None:
-        params["to"] = to_date
-    if project_id is not None:
-        params["project_id"] = str(project_id)
-    if client_id is not None:
-        params["client_id"] = str(client_id)
-    if user_id is not None:
-        params["user_id"] = str(user_id)
-    if billable is not None:
-        params["billable"] = "true" if billable else "false"
+    params: dict = {"from": from_date, "to": to_date}
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if include_forecast is not None:
+        params["include_forecast"] = "true" if include_forecast else "false"
     if page is not None:
         params["page"] = str(page)
     if per_page is not None:
         params["per_page"] = str(per_page)
 
     response = await harvest_request("reports/time/team", params)
+
+    # user_id is not a supported API query param — filter the results here
+    if user_id is not None:
+        response["results"] = [
+            r for r in response.get("results", [])
+            if r.get("user_id") == user_id
+        ]
+
     return json.dumps(response, indent=2)
 
 
