@@ -25,7 +25,9 @@ READ_ONLY_MESSAGE = json.dumps(
         "error": "read_only_mode",
         "message": (
             "This Harvest MCP server is running in read-only mode. "
-            "To enable write operations, remove the HARVEST_READ_ONLY environment variable "
+            "Write operations are disabled. "
+            "Exceptions: create_client and create_contact are still available in read-only mode. "
+            "To enable all write operations, remove the HARVEST_READ_ONLY environment variable "
             "or set it to 'false' in your MCP server configuration."
         ),
     },
@@ -50,7 +52,7 @@ async def harvest_request(path, params=None, method="GET"):
         else:
             response = await client.request(method, url, headers=headers, json=params)
 
-        if response.status_code not in (200, 201):
+        if response.status_code not in (200, 201, 204):
             raise Exception(
                 f"Harvest API Error: {response.status_code} {response.text}"
             )
@@ -258,15 +260,31 @@ async def get_project_details(project_id: int):
 
 
 @mcp.tool()
-async def list_clients(is_active: bool = None):
+async def list_clients(
+    is_active: bool = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
     """List clients with optional filtering.
 
     Args:
         is_active: Pass true to only return active clients and false to return inactive clients
+        updated_since: Only return clients updated after this ISO 8601 datetime
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
     """
     params = {}
     if is_active is not None:
         params["is_active"] = "true" if is_active else "false"
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = 200
 
     response = await harvest_request("clients", params)
     return json.dumps(response, indent=2)
@@ -280,6 +298,136 @@ async def get_client_details(client_id: int):
         client_id: The ID of the client to retrieve
     """
     response = await harvest_request(f"clients/{client_id}")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_client(
+    name: str,
+    is_active: bool = None,
+    address: str = None,
+    currency: str = None,
+    payment_terms: str = None,
+):
+    """Create a new client in Harvest.
+
+    Permitted even when the server is running in read-only mode.
+
+    Args:
+        name: The client's name
+        is_active: Whether the client is active (default: true)
+        address: The client's physical address
+        currency: ISO 4217 currency code (e.g. "USD", "EUR")
+        payment_terms: Default invoice payment terms (e.g. "NET30", "NET15")
+    """
+    # Not gated by HARVEST_READ_ONLY — creating a new client is permitted in read-only mode.
+    params = {"name": name}
+
+    if is_active is not None:
+        params["is_active"] = is_active
+    if address is not None:
+        params["address"] = address
+    if currency is not None:
+        params["currency"] = currency
+    if payment_terms is not None:
+        params["payment_terms"] = payment_terms
+
+    response = await harvest_request("clients", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def list_contacts(
+    client_id: int = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List contacts with optional filtering by client.
+
+    Args:
+        client_id: Return only contacts for this client
+        updated_since: Only return contacts updated after this ISO 8601 datetime
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = 200
+
+    response = await harvest_request("contacts", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_contact_details(contact_id: int):
+    """Get detailed information about a specific contact.
+
+    Args:
+        contact_id: The ID of the contact to retrieve
+    """
+    response = await harvest_request(f"contacts/{contact_id}")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_contact(
+    client_id: int,
+    first_name: str = None,
+    last_name: str = None,
+    email: str = None,
+    title: str = None,
+    phone_office: str = None,
+    phone_mobile: str = None,
+    fax: str = None,
+    invoice_email: str = None,
+):
+    """Create a new contact associated with a client in Harvest.
+
+    Permitted even when the server is running in read-only mode.
+    Update and delete operations for contacts are not supported by this server.
+
+    Args:
+        client_id: The ID of the client this contact belongs to
+        first_name: The contact's first name
+        last_name: The contact's last name
+        email: The contact's email address
+        title: Title or salutation (e.g. "Mr", "Mrs", "Dr")
+        phone_office: Office phone number
+        phone_mobile: Mobile phone number
+        fax: Fax number
+        invoice_email: How this contact receives invoice emails —
+                       "recipient" (direct to), "cc", "bcc", or "none"
+    """
+    # Not gated by HARVEST_READ_ONLY — creating a new contact is permitted in read-only mode.
+    params = {"client_id": client_id}
+
+    if first_name is not None:
+        params["first_name"] = first_name
+    if last_name is not None:
+        params["last_name"] = last_name
+    if email is not None:
+        params["email"] = email
+    if title is not None:
+        params["title"] = title
+    if phone_office is not None:
+        params["phone_office"] = phone_office
+    if phone_mobile is not None:
+        params["phone_mobile"] = phone_mobile
+    if fax is not None:
+        params["fax"] = fax
+    if invoice_email is not None:
+        params["invoice_email"] = invoice_email
+
+    response = await harvest_request("contacts", params, method="POST")
     return json.dumps(response, indent=2)
 
 

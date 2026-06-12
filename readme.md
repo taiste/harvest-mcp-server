@@ -25,8 +25,14 @@ The server provides the following functionality:
 - Retrieve detailed project information
 
 ### Clients
-- List clients with filtering options
+- List clients with filtering options (active status, updated_since, pagination)
 - Retrieve detailed client information
+- Create new clients (name, address, currency, payment terms)
+
+### Contacts
+- List contacts with filtering by client, updated_since, and pagination
+- Retrieve detailed contact information
+- Create new contacts associated with a client (name, email, phone, invoice email role)
 
 ### Tasks
 - List available tasks with filtering options
@@ -88,6 +94,9 @@ Once connected, you can ask Claude about your Harvest data with queries like:
 - "List all my active projects"
 - "Start a timer for project [project_id] and task [task_id]"
 - "Show me all active clients"
+- "Create a new client called Acme Corp with USD currency and a NET30 payment terms"
+- "List contacts for client [client_id]"
+- "Add a contact John Smith (john@acme.com) to client [client_id], CC him on invoices"
 - "List all available tasks"
 - "Get my unsubmitted timesheets from this month"
 - "Show me unsubmitted time entries for user [user_id]"
@@ -109,7 +118,9 @@ You can modify the server code to add more functionality or customize the existi
 
 ## Read-Only Mode
 
-You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables all write operations (creating time entries, starting/stopping timers, creating/updating/deleting estimates, changing estimate state, and sending estimate messages) while keeping all read operations available.
+You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` environment variable to `true`. This disables most write operations (creating time entries, starting/stopping timers, creating/updating/deleting estimates, changing estimate state, and sending estimate messages) while keeping all read operations available.
+
+**Exceptions:** `create_client` and `create_contact` are permitted even in read-only mode, since they create new records rather than modifying existing data.
 
 ```json
 {
@@ -132,7 +143,7 @@ You can run the server in read-only mode by setting the `HARVEST_READ_ONLY` envi
 }
 ```
 
-When read-only mode is enabled, any attempt to call a write tool will return an error message explaining that the server is in read-only mode and how to enable write access.
+When read-only mode is enabled, any attempt to call a write tool (other than `create_client` and `create_contact`) will return an error message explaining that the server is in read-only mode and how to enable write access.
 
 ## Security Notes
 
