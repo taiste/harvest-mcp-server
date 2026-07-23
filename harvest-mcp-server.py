@@ -213,18 +213,34 @@ async def start_timer(
 
 
 @mcp.tool()
-async def list_projects(client_id: int = None, is_active: bool = None):
+async def list_projects(
+    client_id: int = None,
+    is_active: bool = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
     """List projects with optional filtering.
 
     Args:
-        client_id: Filter by client ID
+        client_id: Only return projects belonging to the client with the given ID
         is_active: Pass true to only return active projects and false to return inactive projects
+        updated_since: Only return projects updated since the given datetime (e.g. 2021-04-09T12:48:29Z)
+        page: The page number to use in pagination (default: 1). Deprecated by Harvest
+            in favor of cursor-based pagination via the response's links.next URL.
+        per_page: The number of records to return per page (1-2000, default: 2000)
     """
     params = {}
     if client_id is not None:
         params["client_id"] = str(client_id)
     if is_active is not None:
         params["is_active"] = "true" if is_active else "false"
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
 
     response = await harvest_request("projects", params)
     return json.dumps(response, indent=2)
@@ -238,6 +254,724 @@ async def get_project_details(project_id: int):
         project_id: The ID of the project to retrieve
     """
     response = await harvest_request(f"projects/{project_id}")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_project(
+    client_id: int,
+    name: str,
+    is_billable: bool,
+    bill_by: str,
+    budget_by: str,
+    code: str = None,
+    is_active: bool = None,
+    is_fixed_fee: bool = None,
+    hourly_rate: float = None,
+    budget_is_monthly: bool = None,
+    budget: float = None,
+    cost_budget: float = None,
+    cost_budget_include_expenses: bool = None,
+    notify_when_over_budget: bool = None,
+    over_budget_notification_percentage: float = None,
+    show_budget_to_all: bool = None,
+    fee: float = None,
+    notes: str = None,
+    starts_on: str = None,
+    ends_on: str = None,
+):
+    """Create a new project.
+
+    Empirical findings (not in Harvest's docs):
+
+    1. budget_by acceptance is unpredictable from the API surface alone.
+       Only "none" is unconditionally accepted. Every other value
+       ("project", "project_cost", "task", "task_fees", "person") has
+       been observed to silently coerce to "none" (HTTP 200, no error)
+       in at least one tested project/account state. The behavior
+       depends on the account's plan tier, the authenticated user's
+       role, the project's existing assignments, and (per finding 2
+       below) whether you pair the value with its companion budget /
+       cost_budget field in the same request. If you depend on a
+       specific budget_by, re-read after the call and verify it persisted.
+
+    2. budget-cluster coupling. The fields budget, cost_budget,
+       cost_budget_include_expenses, and budget_is_monthly are silently
+       zeroed/nulled if the project's resulting budget_by is "none". To
+       activate any of them, send budget_by="project" (for budget hours)
+       or "project_cost" (for cost_budget money) in the SAME request —
+       sending budget_by alone, without the cluster field, frequently
+       results in coerce-to-none.
+
+    Args:
+        client_id: The ID of the client to associate this project with (required)
+        name: The name of the project (required)
+        is_billable: Whether the project is billable or not (required)
+        bill_by: The method by which the project is invoiced (required). One of:
+            "Project", "Tasks", "People", "none". Note the mixed casing — Harvest's
+            API expects exactly these values. (Distinct from budget_by, which is
+            all-lowercase.)
+        budget_by: The method by which the project is budgeted (required). One of:
+            "project", "project_cost", "task", "task_fees", "person", "none".
+            Note this is all-lowercase, unlike bill_by. See the function-level
+            note above about which values round-trip reliably.
+        code: The code associated with the project. Note: passing an empty
+            string ("") clears the field to null rather than storing ""
+        is_active: Whether the project is active or archived. Defaults to true
+        is_fixed_fee: Whether the project is a fixed-fee project or not
+        hourly_rate: Rate for projects billed by Project Hourly Rate
+        budget_is_monthly: Option to have the budget reset every month. Defaults
+            to false. Silently ignored if budget_by="none" — see note above
+        budget: The budget in HOURS for the project when budgeting by time
+            (i.e. budget_by="project", "task", or "person"). Use cost_budget for
+            money-based budgets. Silently nulled if budget_by="none"
+        cost_budget: The MONETARY budget for the project when budgeting by money
+            (i.e. budget_by="project_cost" or "task_fees"). Use budget for
+            hours-based budgets. Silently nulled if budget_by="none"
+        cost_budget_include_expenses: Option for budget of Total Project Fees
+            projects to include tracked expenses. Defaults to false. Silently
+            ignored if budget_by="none"
+        notify_when_over_budget: Whether Project Managers should be notified when
+            the project goes over budget. Defaults to false
+        over_budget_notification_percentage: Percentage value used to trigger
+            over-budget email alerts (e.g. 10.0 for 10.0%)
+        show_budget_to_all: Option to show project budget to all employees.
+            Defaults to false. Does not apply to Total Project Fee projects
+        fee: The amount you plan to invoice for the project. Only used by
+            fixed-fee projects
+        notes: Project notes
+        starts_on: Date the project was started (YYYY-MM-DD)
+        ends_on: Date the project will end (YYYY-MM-DD)
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {
+        "client_id": client_id,
+        "name": name,
+        "is_billable": is_billable,
+        "bill_by": bill_by,
+        "budget_by": budget_by,
+    }
+    if code is not None:
+        params["code"] = code
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_fixed_fee is not None:
+        params["is_fixed_fee"] = is_fixed_fee
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget_is_monthly is not None:
+        params["budget_is_monthly"] = budget_is_monthly
+    if budget is not None:
+        params["budget"] = budget
+    if cost_budget is not None:
+        params["cost_budget"] = cost_budget
+    if cost_budget_include_expenses is not None:
+        params["cost_budget_include_expenses"] = cost_budget_include_expenses
+    if notify_when_over_budget is not None:
+        params["notify_when_over_budget"] = notify_when_over_budget
+    if over_budget_notification_percentage is not None:
+        params["over_budget_notification_percentage"] = over_budget_notification_percentage
+    if show_budget_to_all is not None:
+        params["show_budget_to_all"] = show_budget_to_all
+    if fee is not None:
+        params["fee"] = fee
+    if notes is not None:
+        params["notes"] = notes
+    if starts_on is not None:
+        params["starts_on"] = starts_on
+    if ends_on is not None:
+        params["ends_on"] = ends_on
+
+    response = await harvest_request("projects", params, method="POST")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_project(
+    project_id: int,
+    client_id: int = None,
+    name: str = None,
+    code: str = None,
+    is_active: bool = None,
+    is_billable: bool = None,
+    is_fixed_fee: bool = None,
+    bill_by: str = None,
+    hourly_rate: float = None,
+    budget_by: str = None,
+    budget_is_monthly: bool = None,
+    budget: float = None,
+    cost_budget: float = None,
+    cost_budget_include_expenses: bool = None,
+    notify_when_over_budget: bool = None,
+    over_budget_notification_percentage: float = None,
+    show_budget_to_all: bool = None,
+    fee: float = None,
+    notes: str = None,
+    starts_on: str = None,
+    ends_on: str = None,
+):
+    """Update an existing project.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    To archive a project (instead of deleting it and losing all its
+    time entries and expenses), pass is_active=False.
+
+    Empirical findings (not in Harvest's docs):
+
+    1. budget_by acceptance is unpredictable from the API surface alone.
+       Only "none" is unconditionally accepted. Every other value
+       ("project", "project_cost", "task", "task_fees", "person") has
+       been observed to silently coerce to "none" (HTTP 200, no error)
+       in at least one tested project/account state. The behavior
+       depends on the account's plan tier, the authenticated user's
+       role, the project's existing assignments, and (per finding 2
+       below) whether you pair the value with its companion budget /
+       cost_budget field in the same request. Re-read after the call
+       and verify it persisted.
+
+    2. budget-cluster coupling. The fields budget, cost_budget,
+       cost_budget_include_expenses, and budget_is_monthly are silently
+       zeroed/nulled when the project's resulting budget_by is "none". To
+       set or change any of them, send budget_by="project" (for budget
+       hours) or "project_cost" (for cost_budget money) in the SAME PATCH;
+       sending the cluster field alone with stored budget_by="none" is a
+       no-op even though the response is 200. Sending budget_by alone,
+       without the cluster field, frequently results in coerce-to-none.
+
+    3. Empty-string clearing differs by field. Passing code="" clears the
+       value to null on the server. Passing notes="" round-trips as the
+       empty string. The two text fields use different clearing semantics.
+
+    Args:
+        project_id: The ID of the project to update
+        client_id: The ID of the client to associate this project with
+        name: The name of the project
+        code: The code associated with the project. Passing "" clears the
+            field to null
+        is_active: Whether the project is active or archived. Pass False
+            to archive — this is the recommended alternative to delete_project
+        is_billable: Whether the project is billable or not
+        is_fixed_fee: Whether the project is a fixed-fee project or not
+        bill_by: The method by which the project is invoiced. One of:
+            "Project", "Tasks", "People", "none". Note the mixed casing —
+            distinct from budget_by, which is all-lowercase
+        hourly_rate: Rate for projects billed by Project Hourly Rate
+        budget_by: The method by which the project is budgeted. One of:
+            "project", "project_cost", "task", "task_fees", "person", "none".
+            Note this is all-lowercase, unlike bill_by. See the function-level
+            empirical note about which values round-trip reliably.
+        budget_is_monthly: Option to have the budget reset every month.
+            Silently ignored if budget_by ends up as "none"
+        budget: The budget in HOURS for the project when budgeting by time
+            (i.e. budget_by="project", "task", or "person"). Silently nulled
+            if budget_by ends up as "none" — pair with budget_by in the same
+            call to set this field
+        cost_budget: The MONETARY budget for the project when budgeting by
+            money (i.e. budget_by="project_cost" or "task_fees"). Silently
+            nulled if budget_by ends up as "none" — pair with budget_by in
+            the same call to set this field
+        cost_budget_include_expenses: Option for budget of Total Project
+            Fees projects to include tracked expenses. Silently ignored if
+            budget_by ends up as "none"
+        notify_when_over_budget: Whether Project Managers should be notified
+            when the project goes over budget
+        over_budget_notification_percentage: Percentage value used to
+            trigger over-budget email alerts (e.g. 10.0 for 10.0%)
+        show_budget_to_all: Option to show project budget to all employees.
+            Does not apply to Total Project Fee projects
+        fee: The amount you plan to invoice for the project. Only used by
+            fixed-fee projects
+        notes: Project notes. Passing "" stores the empty string (unlike code)
+        starts_on: Date the project was started (YYYY-MM-DD)
+        ends_on: Date the project will end (YYYY-MM-DD)
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if client_id is not None:
+        params["client_id"] = client_id
+    if name is not None:
+        params["name"] = name
+    if code is not None:
+        params["code"] = code
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_billable is not None:
+        params["is_billable"] = is_billable
+    if is_fixed_fee is not None:
+        params["is_fixed_fee"] = is_fixed_fee
+    if bill_by is not None:
+        params["bill_by"] = bill_by
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget_by is not None:
+        params["budget_by"] = budget_by
+    if budget_is_monthly is not None:
+        params["budget_is_monthly"] = budget_is_monthly
+    if budget is not None:
+        params["budget"] = budget
+    if cost_budget is not None:
+        params["cost_budget"] = cost_budget
+    if cost_budget_include_expenses is not None:
+        params["cost_budget_include_expenses"] = cost_budget_include_expenses
+    if notify_when_over_budget is not None:
+        params["notify_when_over_budget"] = notify_when_over_budget
+    if over_budget_notification_percentage is not None:
+        params["over_budget_notification_percentage"] = over_budget_notification_percentage
+    if show_budget_to_all is not None:
+        params["show_budget_to_all"] = show_budget_to_all
+    if fee is not None:
+        params["fee"] = fee
+    if notes is not None:
+        params["notes"] = notes
+    if starts_on is not None:
+        params["starts_on"] = starts_on
+    if ends_on is not None:
+        params["ends_on"] = ends_on
+
+    response = await harvest_request(f"projects/{project_id}", params, method="PATCH")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def delete_project(project_id: int):
+    """Delete a project.
+
+    DESTRUCTIVE: deletes the project AND all time entries and expenses
+    tracked to it. Invoices associated with the project are NOT deleted.
+
+    If you want to retain the project's time entries and expenses,
+    archive the project instead by calling update_project with
+    is_active=False — this is Harvest's documented recommendation.
+
+    Args:
+        project_id: The ID of the project to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(f"projects/{project_id}", method="DELETE")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def list_task_assignments(
+    project_id: int = None,
+    is_active: bool = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List task assignments with optional filtering.
+
+    A task assignment links a Harvest task to a project, with optional
+    per-assignment billable flag, hourly rate, and budget.
+
+    Without project_id, lists task assignments across the whole account
+    (GET /v2/task_assignments). With project_id, lists task assignments
+    for that project only (GET /v2/projects/{id}/task_assignments).
+
+    Args:
+        project_id: If provided, scope to this project's task assignments.
+            If omitted, list all task assignments in the account.
+        is_active: Pass true to only return active task assignments and
+            false to return inactive ones
+        updated_since: Only return task assignments updated since the
+            given datetime (e.g. 2021-04-09T12:48:29Z)
+        page: The page number to use in pagination (default: 1). Deprecated
+            by Harvest in favor of cursor-based pagination via the response's
+            links.next URL.
+        per_page: The number of records to return per page (1-2000, default: 2000)
+    """
+    params = {}
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    path = (
+        f"projects/{project_id}/task_assignments"
+        if project_id is not None
+        else "task_assignments"
+    )
+    response = await harvest_request(path, params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_task_assignment_details(project_id: int, task_assignment_id: int):
+    """Get detailed information about a specific task assignment.
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to retrieve
+    """
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_task_assignment(
+    project_id: int,
+    task_id: int,
+    is_active: bool = None,
+    billable: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Create a task assignment, linking a task to a project.
+
+    Empirical findings (not in Harvest's docs):
+
+    1. Duplicate-task UPSERT. POSTing with a task_id that is already
+       assigned to this project does NOT return 422. Harvest returns 201
+       with the existing task_assignment id and applies any provided
+       fields the project's bill_by/budget_by accept (so e.g. is_active
+       and billable always apply; hourly_rate and budget apply only when
+       the parent project's bill_by/budget_by match — otherwise they
+       follow the standard silent-null rules described per-field below).
+       Callers expecting a conflict error will instead silently mutate
+       state. Use update_task_assignment deliberately when you mean to
+       change an existing one.
+
+    2. billable default comes from the task, not the spec. Harvest's spec
+       says billable defaults to false when omitted, but in practice it
+       defaults to the parent task's billable_by_default. Pass billable
+       explicitly if you depend on a specific value.
+
+    Args:
+        project_id: The ID of the project to assign the task to (required)
+        task_id: The ID of the task to associate with the project (required)
+        is_active: Whether the task assignment is active or archived.
+            Defaults to true
+        billable: Whether the task assignment is billable or not. See the
+            empirical note above about Harvest's actual default behavior
+        hourly_rate: Custom rate used when the project's bill_by is "Tasks".
+            Silently nulled in the response if the project's bill_by is any
+            other value — no error raised
+        budget: Per-task-assignment budget. Used when the project's
+            budget_by is "task" or "task_fees". Silently nulled in the
+            response if budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"task_id": task_id}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if billable is not None:
+        params["billable"] = billable
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_task_assignment(
+    project_id: int,
+    task_assignment_id: int,
+    is_active: bool = None,
+    billable: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Update an existing task assignment.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to update
+        is_active: Whether the task assignment is active or archived
+        billable: Whether the task assignment is billable or not. When
+            true, time tracked against this task on this project is marked
+            billable
+        hourly_rate: Custom rate used when the project's bill_by is "Tasks".
+            Silently nulled in the response if the project's bill_by is any
+            other value — no error raised
+        budget: Per-task-assignment budget. Used when the project's
+            budget_by is "task" or "task_fees". Silently nulled in the
+            response if budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if billable is not None:
+        params["billable"] = billable
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}",
+        params,
+        method="PATCH",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def delete_task_assignment(project_id: int, task_assignment_id: int):
+    """Delete a task assignment.
+
+    Per Harvest's docs, deletion is only possible if the task assignment
+    has no time entries logged against it. If time entries exist, the
+    API returns HTTP 422 with the message "This task assignment isn’t
+    removable because there are time entries associated with it." (note
+    the typographic apostrophe U+2019 in "isn’t") and nothing is
+    deleted. In that case, archive the task assignment instead via
+    update_task_assignment(is_active=False).
+
+    Args:
+        project_id: The ID of the project the task assignment belongs to
+        task_assignment_id: The ID of the task assignment to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(
+        f"projects/{project_id}/task_assignments/{task_assignment_id}",
+        method="DELETE",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def list_user_assignments(
+    project_id: int = None,
+    user_id: int = None,
+    is_active: bool = None,
+    updated_since: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """List user assignments with optional filtering.
+
+    A user assignment links a Harvest user to a project, with optional
+    project-manager flag, billable rates (custom or default), and budget.
+
+    Without project_id, lists user assignments across the whole account
+    (GET /v2/user_assignments). With project_id, lists user assignments
+    for that project only (GET /v2/projects/{id}/user_assignments).
+
+    Args:
+        project_id: If provided, scope to this project's user assignments.
+            If omitted, list all user assignments in the account.
+        user_id: Only return user assignments belonging to the user with
+            the given ID. Available on the account-wide endpoint and the
+            project-scoped endpoint
+        is_active: Pass true to only return active user assignments and
+            false to return inactive ones
+        updated_since: Only return user assignments updated since the
+            given datetime (e.g. 2021-04-09T12:48:29Z)
+        page: The page number to use in pagination (default: 1). Deprecated
+            by Harvest in favor of cursor-based pagination via the response's
+            links.next URL.
+        per_page: The number of records to return per page (1-2000, default: 2000)
+    """
+    params = {}
+    if user_id is not None:
+        params["user_id"] = str(user_id)
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
+    if updated_since is not None:
+        params["updated_since"] = updated_since
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+
+    path = (
+        f"projects/{project_id}/user_assignments"
+        if project_id is not None
+        else "user_assignments"
+    )
+    response = await harvest_request(path, params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_user_assignment_details(project_id: int, user_assignment_id: int):
+    """Get detailed information about a specific user assignment.
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to retrieve
+    """
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def create_user_assignment(
+    project_id: int,
+    user_id: int,
+    is_active: bool = None,
+    is_project_manager: bool = None,
+    use_default_rates: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Create a user assignment, linking a user to a project.
+
+    Empirical finding (not in Harvest's docs): POSTing with a user_id
+    that is already assigned to this project does NOT return 422.
+    Harvest returns 201 with the existing user_assignment id, and any
+    fields you provide on the request are silently dropped — the
+    response and a subsequent GET both show the assignment unchanged.
+    To change an existing user assignment, use update_user_assignment.
+
+    Args:
+        project_id: The ID of the project to assign the user to (required)
+        user_id: The ID of the user to associate with the project (required)
+        is_active: Whether the user assignment is active or archived.
+            Defaults to true
+        is_project_manager: Whether the user has Project Manager
+            permissions for this project. Per Harvest's docs, defaults to
+            false for regular users and true for users who are already
+            account-wide Project Managers or Administrators
+        use_default_rates: Whether to use the user's account-default
+            billable rates for this project (true) or a custom rate
+            defined on this assignment (false). Defaults to true. Only
+            relevant when the project's bill_by is "People" — silently
+            ignored / coerced back to true when bill_by is any other value
+        hourly_rate: Custom rate used when the project's bill_by is
+            "People" AND use_default_rates is false. Silently nulled in
+            the response if the project's bill_by is any other value —
+            no error raised. Note: when bill_by is "People" and
+            use_default_rates is true, the response shows the user's
+            account-default billable rate, not 0
+        budget: Per-user-assignment budget. Used when the project's
+            budget_by is "person". Silently nulled in the response if
+            budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {"user_id": user_id}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_project_manager is not None:
+        params["is_project_manager"] = is_project_manager
+    if use_default_rates is not None:
+        params["use_default_rates"] = use_default_rates
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments", params, method="POST"
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def update_user_assignment(
+    project_id: int,
+    user_assignment_id: int,
+    is_active: bool = None,
+    is_project_manager: bool = None,
+    use_default_rates: bool = None,
+    hourly_rate: float = None,
+    budget: float = None,
+):
+    """Update an existing user assignment.
+
+    Only the parameters you provide are changed; omitted parameters
+    remain untouched.
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to update
+        is_active: Whether the user assignment is active or archived
+        is_project_manager: Whether the user has Project Manager
+            permissions for this project
+        use_default_rates: Whether to use the user's account-default
+            billable rates (true) or a custom rate defined on this
+            assignment (false). Only relevant when the project's bill_by
+            is "People" — silently ignored / coerced back to true when
+            bill_by is any other value
+        hourly_rate: Custom rate used when the project's bill_by is
+            "People" AND use_default_rates is false. Silently nulled in
+            the response if the project's bill_by is any other value —
+            no error raised
+        budget: Per-user-assignment budget. Used when the project's
+            budget_by is "person". Silently nulled in the response if
+            budget_by is any other value — no error raised
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    params = {}
+    if is_active is not None:
+        params["is_active"] = is_active
+    if is_project_manager is not None:
+        params["is_project_manager"] = is_project_manager
+    if use_default_rates is not None:
+        params["use_default_rates"] = use_default_rates
+    if hourly_rate is not None:
+        params["hourly_rate"] = hourly_rate
+    if budget is not None:
+        params["budget"] = budget
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}",
+        params,
+        method="PATCH",
+    )
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def delete_user_assignment(project_id: int, user_assignment_id: int):
+    """Delete a user assignment.
+
+    Per Harvest's docs, deletion is only possible if the user assignment
+    has no time entries OR expenses logged against it. If either exists,
+    the API returns HTTP 422 with the message "This task assignment
+    isn’t removable because it has tracked time or expenses." (note two
+    Harvest-side quirks: the message uses a typographic apostrophe
+    U+2019, and it says "task assignment" even though the endpoint is
+    user_assignments). Nothing is deleted in that case. To retain
+    history, archive the user assignment instead via
+    update_user_assignment(is_active=False).
+
+    Args:
+        project_id: The ID of the project the user assignment belongs to
+        user_assignment_id: The ID of the user assignment to delete
+    """
+    if HARVEST_READ_ONLY:
+        return READ_ONLY_MESSAGE
+
+    response = await harvest_request(
+        f"projects/{project_id}/user_assignments/{user_assignment_id}",
+        method="DELETE",
+    )
     return json.dumps(response, indent=2)
 
 
